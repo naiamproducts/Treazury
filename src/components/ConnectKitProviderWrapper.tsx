@@ -27,8 +27,15 @@ export function ConnectKitProviderWrapper({
     //
     // We can't prevent the error from being thrown (it's internal
     // to ConnectKit/porto/Aave), but we can prevent it from
-    // bubbling as an unhandled page error by installing a
-    // temporary global error handler during the initial render.
+    // bubbling as an unhandled page error. Some SDK failures arrive
+    // through window.onerror and others through unhandledrejection,
+    // so both paths need the same narrow filter.
+    const provider = (window as unknown as { ethereum?: unknown }).ethereum
+    const hasProvider = provider !== undefined
+    const matchesAaveTimeout = (text: string): boolean =>
+      text.includes('EIP1193 provider connection timeout') ||
+      text.includes('AaveAccountSdk.connect')
+
     const originalErrorHandler = window.onerror
     window.onerror = (
       message: string | Event,
@@ -39,11 +46,7 @@ export function ConnectKitProviderWrapper({
     ): boolean => {
       // Safe stringification that handles both string and Event
       const msg = typeof message === 'string' ? message : JSON.stringify(message)
-      if (
-        error instanceof Error &&
-        (msg.includes('EIP1193 provider connection timeout') ||
-          msg.includes('AaveAccountSdk.connect'))
-      ) {
+      if (!hasProvider && error instanceof Error && matchesAaveTimeout(msg)) {
         // Log and suppress — this is expected in headless.
         console.debug('[PayStyle] Suppressed Aave Account SDK timeout:', msg)
         return true
@@ -56,8 +59,22 @@ export function ConnectKitProviderWrapper({
       return false
     }
 
+    const handleRejection = (event: PromiseRejectionEvent): void => {
+      const reason: unknown = event.reason
+      const text =
+        reason instanceof Error
+          ? `${reason.name}: ${reason.message}\n${reason.stack ?? ''}`
+          : JSON.stringify(reason)
+      if (!hasProvider && matchesAaveTimeout(text)) {
+        event.preventDefault()
+        console.debug('[PayStyle] Suppressed Aave Account SDK rejection:', text)
+      }
+    }
+    window.addEventListener('unhandledrejection', handleRejection)
+
     return () => {
       window.onerror = originalErrorHandler
+      window.removeEventListener('unhandledrejection', handleRejection)
     }
   }, [])
 
