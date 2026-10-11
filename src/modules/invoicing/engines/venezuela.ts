@@ -40,6 +40,23 @@ export class VenezuelaInvoiceEngine implements InvoiceEngine {
   readonly countryName = 'Venezuela'
   readonly supportedCurrencies = ['USD', 'USDC', 'VES'] as const
 
+  readonly taxIdLabel = 'RIF'
+  readonly taxIdPlaceholder = 'J-12345678-9'
+  readonly taxIdExample = 'J-12345678-9'
+
+  readonly buyerTaxIdLabel = 'RIF'
+  readonly buyerTaxIdPlaceholder = 'J-12345678-9'
+  readonly buyerTaxIdExample = 'J-12345678-9 o V-12345678-0'
+
+  validateTaxId(taxId: string): boolean {
+    return isValidVenezuelanRIF(taxId)
+  }
+
+  validateBuyerTaxId(taxId: string): boolean {
+    if (!taxId.trim()) return true
+    return isValidVenezuelanRIF(taxId)
+  }
+
   // ── generate ─────────────────────────────────────────────────────────────
 
   generate(params: GenerateInvoiceParams): InvoiceDocument {
@@ -103,14 +120,17 @@ export class VenezuelaInvoiceEngine implements InvoiceEngine {
 
       issuer: {
         name: tenant.name,
-        taxId: '',          // caller must populate from tenant profile
-        taxIdLabel: 'RIF',
+        taxId: tenant.taxId ?? '',
+        taxIdLabel: tenant.taxIdLabel ?? 'RIF',
+        address: tenant.address,
+        phone: tenant.phone,
+        email: tenant.email,
       },
 
       buyer: {
         name: buyer.name,
         taxId: buyer.taxId,
-        taxIdLabel: buyer.taxId ? 'RIF' : undefined,
+        taxIdLabel: buyer.taxId ? this.buyerTaxIdLabel : undefined,
         phone: buyer.phone,
         email: buyer.email,
       },
@@ -264,8 +284,12 @@ export class VenezuelaInvoiceEngine implements InvoiceEngine {
  * Validates Venezuelan RIF format.
  * Pattern: [JGVEP]-\d{8}-\d
  * Examples: J-12345678-9, V-87654321-0
+ *
+ * Exported so callers (e.g. the dashboard store) can reject a bad RIF before
+ * reserving a fiscal number — next_invoice_number() burns a number even when
+ * the invoice that follows it fails validation.
  */
-function isValidVenezuelanRIF(rif: string): boolean {
+export function isValidVenezuelanRIF(rif: string): boolean {
   return /^[JGVEP]-\d{8}-\d$/.test(rif.toUpperCase().trim())
 }
 

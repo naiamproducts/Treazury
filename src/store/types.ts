@@ -12,6 +12,7 @@
  */
 
 import type { StoreError } from './errors'
+import type { CountryCode } from '../modules/shared/types'
 
 export type FieldType = 'text' | 'number' | 'select' | 'boolean'
 
@@ -80,6 +81,15 @@ export interface Order {
   orderNumber: string
   buyerName: string
   buyerPhone: string        // WhatsApp number — placeholder for automation
+  /** Linked saved-customer row (contacts.id). Absent for one-off buyers. */
+  contactId?: string
+  /** Buyer fiscal ID snapshot (orders.buyer_tax_id): RIF / CUIT / RFC / …. */
+  buyerTaxId?: string
+  /** No orders column behind these two: they travel with the order form and
+   *  are persisted on the linked contact row, then read back from it when the
+   *  invoice is generated. */
+  buyerEmail?: string
+  buyerAddress?: string
   lines: OrderLine[]
   subtotal: string
   total: string             // includes IVA + IGTF if applicable
@@ -110,6 +120,37 @@ export interface BusinessConfig {
   merchantWallet: string
   invoicePrefix: string    // e.g. "0001"
   applyIgtf: boolean       // whether to add 3% IGTF on USDC payments
+  /** Preferred fiscal country/profile (tenants.country). Selects the invoice
+   *  engine used for labels, placeholders and tax-ID validation. */
+  country: CountryCode
+}
+
+/**
+ * Saved-customer profile: the UI shape of a `contacts` row. The DB mapping
+ * (snake_case) lives in ./mappers.ts — the UI never touches a Contact row.
+ *
+ * There is no "preferred" column: the order form keeps the last-used customer
+ * id in localStorage and pre-selects it, which is the recurring-customer
+ * default without a schema change.
+ */
+export interface Customer {
+  id: string
+  name: string
+  phone?: string
+  email?: string
+  taxId?: string
+  address?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** Options for the customer step of addOrder (see DashboardStore.addOrder). */
+export interface AddOrderCustomerOptions {
+  /** Write the form's buyer data into contacts (insert or update). When false
+   *  the order still links an exactly-matching existing customer read-only —
+   *  linking never writes, so it cannot fail. */
+  saveCustomer?: boolean
 }
 
 export interface DashboardStore {
@@ -123,12 +164,19 @@ export interface DashboardStore {
   // Orders
   orders: Order[]
 
+  // Saved customers (contacts table, active rows only)
+  customers: Customer[]
+
   // Config
   config: BusinessConfig
 
   // True while the initial (or a manual) read from Supabase is in flight, so
   // views can render a skeleton instead of flashing their empty state.
   loading: boolean
+
+  // Same window as `loading`, scoped to the customers read, so the order form
+  // can show the customer selector as "cargando" instead of "sin clientes".
+  customersLoading: boolean
 
   // Last failed read/write, kept so the shell can surface it. Mutations also
   // throw that same error; this field is for failures that happen outside a
@@ -146,7 +194,9 @@ export interface DashboardStore {
   updateStock: (productId: string, variantId: string | undefined, delta: number) => Promise<void>
   reserveStock: (productId: string, variantId: string | undefined, qty: number) => Promise<void>
   releaseStock: (productId: string, variantId: string | undefined, qty: number) => Promise<void>
-  addOrder: (o: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>) => Promise<Order>
+  addOrder: (o: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>, options?: AddOrderCustomerOptions) => Promise<Order>
   updateOrder: (id: string, patch: Partial<Order>) => Promise<Order>
+  addCustomer: (c: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Customer>
+  updateCustomer: (id: string, patch: Partial<Customer>) => Promise<Customer>
   updateConfig: (patch: Partial<BusinessConfig>) => Promise<void>
 }

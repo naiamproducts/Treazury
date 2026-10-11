@@ -10,9 +10,31 @@ import {
   Copy, CheckCheck, ChevronDown, ChevronUp, AlertCircle, Loader2,
 } from 'lucide-react'
 import { TokenUSDC } from '@web3icons/react'
-import type { DashboardStore, Order, OrderLine } from '@/store'
+import type { Customer, DashboardStore, Order, OrderLine } from '@/store'
+import { invoiceFactory } from '@/modules/invoicing/factory'
+import type { CountryCode } from '@/modules/shared/types'
 
 // ── helpers ────────────────────────────────────────────────────────────────
+
+/** Last linked customer, kept so recurring buyers are pre-selected. */
+const LAST_CUSTOMER_KEY = 'paystyle:last-customer-id'
+
+function readLastUsedId(): string | null {
+  try {
+    return window.localStorage.getItem(LAST_CUSTOMER_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** Tenant's registered engine for buyer-tax labels/validation (VE fallback). */
+function engineForCountry(country: CountryCode) {
+  try {
+    return invoiceFactory.get(country)
+  } catch {
+    return invoiceFactory.get('VE')
+  }
+}
 
 function statusLabel(s: Order['status']) {
   const map: Record<Order['status'], { label: string; bg: string; fg: string }> = {
@@ -56,11 +78,57 @@ interface NewOrderFormProps {
 }
 
 function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
-  const [buyerName, setBuyerName] = useState('')
-  const [buyerPhone, setBuyerPhone] = useState('')
+  const engine = engineForCountry(store.config.country)
+
+  // Mount-time seed: the form opens after the tenant load, so the customer
+  // list is already populated. The last-used customer is pre-selected as the
+  // recurring-buyer default; everything below stays editable.
+  const [seed] = useState<Customer | undefined>(() => {
+    if (store.customers.length === 0) return undefined
+    const last = readLastUsedId()
+    return last ? store.customers.find(c => c.id === last) : undefined
+  })
+  const [mode, setMode] = useState<'saved' | 'new'>(store.customers.length > 0 ? 'saved' : 'new')
+  const [selectedId, setSelectedId] = useState<string | null>(seed?.id ?? null)
+  const [buyerName, setBuyerName] = useState(seed?.name ?? '')
+  const [buyerPhone, setBuyerPhone] = useState(seed?.phone ?? '')
+  const [buyerTaxId, setBuyerTaxId] = useState(seed?.taxId ?? '')
+  const [buyerEmail, setBuyerEmail] = useState(seed?.email ?? '')
+  const [buyerAddress, setBuyerAddress] = useState(seed?.address ?? '')
+  const [saveCustomer, setSaveCustomer] = useState(store.customers.length === 0)
+  const [search, setSearch] = useState('')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<OrderLine[]>([])
   const [error, setError] = useState('')
+
+  const lastUsedId = readLastUsedId()
+  const query = search.trim().toLowerCase()
+  const filteredCustomers = query
+    ? store.customers.filter(c =>
+        [c.name, c.phone, c.email, c.taxId].some(v => (v ?? '').toLowerCase().includes(query)))
+    : store.customers
+
+  const selectCustomer = (customer: Customer) => {
+    setSelectedId(customer.id)
+    setBuyerName(customer.name)
+    setBuyerPhone(customer.phone ?? '')
+    setBuyerTaxId(customer.taxId ?? '')
+    setBuyerEmail(customer.email ?? '')
+    setBuyerAddress(customer.address ?? '')
+    setSaveCustomer(false)
+    setError('')
+  }
+
+  const switchMode = (next: 'saved' | 'new') => {
+    setMode(next)
+    if (next === 'new') {
+      setSelectedId(null)
+      setSaveCustomer(true)
+    } else {
+      setSaveCustomer(false)
+    }
+    setError('')
+  }
 
   const { subtotal, iva, igtf, total } = calcTotal(lines, store.config.applyIgtf)
 
@@ -110,12 +178,20 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
   // order row, its lines and the stock reservations are separate writes.
   const handleCreate = async () => {
     if (!buyerName.trim()) { setError('El nombre del comprador es requerido.'); return }
+    if (buyerTaxId.trim() && !engine.validateBuyerTaxId(buyerTaxId.trim())) {
+      setError(`El ${engine.buyerTaxIdLabel} no tiene un formato válido. Ej: ${engine.buyerTaxIdExample}`)
+      return
+    }
     if (lines.length === 0) { setError('Agrega al menos un producto.'); return }
     setSaving(true)
     try {
       const order = await store.addOrder({
         buyerName: buyerName.trim(),
         buyerPhone: buyerPhone.trim(),
+        buyerTaxId: buyerTaxId.trim() || undefined,
+        buyerEmail: buyerEmail.trim() || undefined,
+        buyerAddress: buyerAddress.trim() || undefined,
+        contactId: mode === 'saved' ? (selectedId ?? undefined) : undefined,
         lines,
         subtotal: subtotal.toFixed(2),
         taxAmount: iva.toFixed(2),
@@ -124,7 +200,16 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
         currency: 'USD',
         status: 'draft',
         notes: notes.trim() || undefined,
-      })
+      }, { saveCustomer })
+      // Remember the linked buyer as the preferred default for next time.
+      const linkedId = order.contactId ?? selectedId
+      if (linkedId) {
+        try {
+          window.localStorage.setItem(LAST_CUSTOMER_KEY, linkedId)
+        } catch {
+          // Sin almacenamiento local no hay cliente preferido; la orden igual se creó.
+        }
+      }
       await onCreated(order)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo crear la orden.')
@@ -142,18 +227,115 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
       <div className="p-5 space-y-4">
         <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>Nueva orden</h3>
 
-        {/* Buyer */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Nombre del comprador *</label>
-            <input className={inputCls} style={inputStyle} value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder="Ej: Neumáticos El Centro" />
+        {/* Buyer — saved customer or new */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Cliente *</label>
+            {store.customers.length > 0 && (
+              <div className="flex gap-1 rounded-xl p-0.5" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
+                {(['saved', 'new'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => switchMode(m)}
+                    className="rounded-lg px-2.5 py-1 text-xs font-semibold transition-all"
+                    style={mode === m
+                      ? { background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--border)' }
+                      : { color: 'var(--muted)', border: '1px solid transparent' }}
+                  >
+                    {m === 'saved' ? 'Guardado' : 'Nuevo'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {store.customersLoading ? (
+            <p className="px-1 py-2 text-xs" style={{ color: 'var(--muted)' }}>Cargando clientes…</p>
+          ) : mode === 'saved' && store.customers.length > 0 ? (
+            <div className="space-y-2">
+              <input
+                className={inputCls} style={inputStyle}
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar por nombre, teléfono o email…"
+              />
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl p-1" style={{ border: '1px solid var(--border)' }}>
+                {filteredCustomers.length === 0 ? (
+                  <p className="px-3 py-3 text-xs" style={{ color: 'var(--muted)' }}>
+                    Sin coincidencias. Escribe los datos abajo o cambia a “Nuevo”.
+                  </p>
+                ) : filteredCustomers.map(customer => {
+                  const active = customer.id === selectedId
+                  return (
+                    <button
+                      key={customer.id}
+                      onClick={() => selectCustomer(customer)}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition-all hover:opacity-80"
+                      style={active
+                        ? { background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.35)', color: 'var(--ink)' }
+                        : { background: 'var(--surface-muted)', border: '1px solid transparent', color: 'var(--ink)' }}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs font-semibold">{customer.name}</span>
+                        {(customer.phone || customer.email) && (
+                          <span className="block truncate text-xs" style={{ color: 'var(--muted)' }}>
+                            {[customer.phone, customer.email].filter(Boolean).join(' · ')}
+                          </span>
+                        )}
+                      </span>
+                      {customer.id === lastUsedId && (
+                        <span className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)' }}>
+                          Habitual
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Nombre del comprador *</label>
+              <input className={inputCls} style={inputStyle} value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder="Ej: Neumáticos El Centro" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                WhatsApp <span className="font-normal opacity-60">(+58 412...)</span>
+              </label>
+              <input className={inputCls} style={inputStyle} value={buyerPhone} onChange={e => setBuyerPhone(e.target.value)} placeholder="+58 412 000 0000" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                {engine.buyerTaxIdLabel} <span className="font-normal opacity-60">(opcional)</span>
+              </label>
+              <input className={inputCls} style={inputStyle} value={buyerTaxId} onChange={e => setBuyerTaxId(e.target.value)} placeholder={engine.buyerTaxIdPlaceholder} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                Email <span className="font-normal opacity-60">(opcional)</span>
+              </label>
+              <input className={inputCls} style={inputStyle} value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)} placeholder="cliente@correo.com" />
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-              WhatsApp <span className="font-normal opacity-60">(+58 412...)</span>
+              Dirección <span className="font-normal opacity-60">(opcional)</span>
             </label>
-            <input className={inputCls} style={inputStyle} value={buyerPhone} onChange={e => setBuyerPhone(e.target.value)} placeholder="+58 412 000 0000" />
+            <input className={inputCls} style={inputStyle} value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} placeholder="Av. Principal, Caracas" />
           </div>
+
+          <label className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}>
+            <input
+              type="checkbox"
+              checked={saveCustomer}
+              onChange={e => setSaveCustomer(e.target.checked)}
+              className="size-4 accent-indigo-500"
+            />
+            {mode === 'saved' && selectedId
+              ? 'Actualizar los datos del cliente guardado con estos cambios'
+              : 'Guardar como cliente para próximas órdenes'}
+          </label>
         </div>
 
         {/* Product picker */}

@@ -17,11 +17,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Charge as ChargeRow, Order as OrderRow } from '../lib/database.types'
+import type { Charge as ChargeRow, Contact as ContactRow, Order as OrderRow } from '../lib/database.types'
 import { StoreError, asStoreError, toStoreError } from './errors'
 import {
   STORE_TO_DB_ORDER_STATUS,
   configToTenantColumns,
+  customerRowToStore,
+  customerToColumns,
+  matchCustomer,
   nextOrderNumber,
   orderLineRowToStore,
   orderLineToColumns,
@@ -38,10 +41,14 @@ import {
   toText,
   writeAttributes,
 } from './mappers'
-import type { BusinessConfig, DashboardStore, Order, OrderLine, Product } from './types'
+import { invoiceFactory, VenezuelaInvoiceEngine } from '../modules/invoicing'
+import type { InvoiceDocument } from '../modules/invoicing'
+import type { AddOrderCustomerOptions, BusinessConfig, Customer, DashboardStore, Order, OrderLine, Product } from './types'
 
 export type {
+  AddOrderCustomerOptions,
   BusinessConfig,
+  Customer,
   DashboardStore,
   FieldDefinition,
   FieldType,
@@ -59,6 +66,9 @@ const ORDER_NUMBER_ATTEMPTS = 3
 /** Compare-and-swap retries for a concurrent stock adjustment. */
 const STOCK_CAS_ATTEMPTS = 3
 
+/** Register the Venezuela invoice engine on module load. */
+invoiceFactory.register(new VenezuelaInvoiceEngine())
+
 const DEFAULT_CONFIG: BusinessConfig = {
   name: 'Mi Negocio',
   rif: '',
@@ -68,6 +78,7 @@ const DEFAULT_CONFIG: BusinessConfig = {
   merchantWallet: '',
   invoicePrefix: '0001',
   applyIgtf: true,
+  country: 'VE',
 }
 
 // ── Reads ──────────────────────────────────────────────────────────────────
@@ -91,6 +102,22 @@ async function fetchProducts(tenantId: string): Promise<Product[]> {
     .order('created_at', { ascending: false })
   if (error) throw toStoreError(error, 'products')
   return data.map(productRowToStore)
+}
+
+async function fetchCustomers(tenantId: string): Promise<Customer[]> {
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+    .order('name')
+  if (error) throw toStoreError(error, 'contacts')
+  return data.map(customerRowToStore)
+}
+
+/** Keep the customer list stably sorted by name after local inserts. */
+function insertCustomerSorted(prev: Customer[], created: Customer): Customer[] {
+  return [...prev, created].sort((a, b) => a.name.localeCompare(b.name, 'es'))
 }
 
 async function fetchLines(orderId: string): Promise<OrderLine[]> {
@@ -146,6 +173,191 @@ async function fetchOrders(tenantId: string): Promise<Order[]> {
       pickChargeForOrder(chargesByOrder.get(row.id) ?? []),
     ),
   )
+}
+
+// ── Invoice ──────────────────────────────────────────────────────────────────
+
+/**
+ * Generate the fiscal invoice for an order.
+ *
+ * Order matters: the RIF check, the lines check and the existing-invoice
+ * check all run BEFORE next_invoice_number() is called, because that RPC
+ * burns a fiscal number even when the insert that follows it fails (see
+ * migration 002). Validation failures and repeat updates must never consume
+ * numbers.
+ *
+ * Returns null when the order already has a non-voided invoice for this
+ * tenant — a repeat update must not produce a second invoice. Throws
+ * StoreError otherwise (bad RIF, RLS refusal, …); callers report that through
+ * store error state without rolling back the order write that is already
+ * durable.
+ */
+async function generateInvoiceForOrder(
+  tenantId: string,
+  orderId: string,
+): Promise<InvoiceDocument | null> {
+  const tenantConfig = await fetchConfig(tenantId)
+
+  // The tenant's actual registered engine drives labels, placeholders and
+  // tax-ID validation — never a hardcoded country. An unregistered country
+  // (legacy row, hand-edited tenants.country) refuses loudly instead of
+  // invoicing under the wrong fiscal rules.
+  let engine
+  try {
+    engine = invoiceFactory.get(tenantConfig.country)
+  } catch {
+    throw new StoreError('unsupported', `No hay un motor de facturación registrado para el país "${tenantConfig.country}". Elige otro país fiscal en Configuración.`)
+  }
+
+  const rif = tenantConfig.rif.trim()
+  if (!rif) {
+    throw new StoreError('conflict', `Configura el ${engine.taxIdLabel} del negocio antes de generar la factura.`)
+  }
+  if (!engine.validateTaxId(rif)) {
+    throw new StoreError('conflict', `El ${engine.taxIdLabel} configurado (${tenantConfig.rif}) no tiene un formato válido. Ej: ${engine.taxIdExample}`)
+  }
+
+  const { data: alreadyInvoiced, error: existingError } = await supabase
+    .from('invoices')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('order_id', orderId)
+    .neq('status', 'voided')
+    .limit(1)
+  if (existingError) throw toStoreError(existingError, 'invoices')
+  if (alreadyInvoiced.length > 0) return null
+
+  const { data: orderRow, error: orderError } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('id', orderId)
+    .eq('tenant_id', tenantId)
+    .single()
+  if (orderError) throw toStoreError(orderError, 'orders')
+
+  const { data: lineRows, error: linesError } = await supabase
+    .from('order_lines')
+    .select('*')
+    .eq('order_id', orderId)
+  if (linesError) throw toStoreError(linesError, 'order_lines')
+
+  if (lineRows.length === 0) {
+    throw new StoreError('conflict', 'La orden no tiene líneas para facturar.')
+  }
+  const subtotal = lineRows
+    .reduce((sum, row) => sum + Number(row.line_total), 0)
+    .toFixed(2)
+  if (!(Number(subtotal) > 0)) {
+    throw new StoreError('conflict', 'El total de la orden debe ser mayor que cero para facturar.')
+  }
+
+  const { data: invoiceNumber, error: rpcError } = await supabase.rpc('next_invoice_number')
+  if (rpcError) throw toStoreError(rpcError, 'next_invoice_number')
+
+  // Buyer enrichment from the linked saved-customer row. orders has no email
+  // or address columns, so without this read those two would be lost on every
+  // invoice even though the merchant typed them. Best-effort on purpose: a
+  // contact deleted after the order still leaves the order's own snapshot
+  // (buyer_name / buyer_phone / buyer_tax_id), which is enough to invoice.
+  let contact: ContactRow | null = null
+  if (orderRow.contact_id) {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('id', orderRow.contact_id)
+      .eq('tenant_id', tenantId)
+      .single()
+    if (!error) contact = data
+  }
+  const buyerName = orderRow.buyer_name?.trim() || contact?.name.trim() || 'Cliente'
+  const buyerTaxId = orderRow.buyer_tax_id?.trim() || contact?.tax_id?.trim() || undefined
+  const buyerPhone = orderRow.buyer_phone?.trim() || contact?.phone?.trim() || undefined
+  const buyerEmail = contact?.email?.trim() || undefined
+  const buyerAddress = contact?.address?.trim() || undefined
+
+  const invoiceDoc = invoiceFactory.generate(tenantConfig.country, {
+    order: {
+      id: orderRow.id,
+      tenantId: orderRow.tenant_id,
+      contactRef: orderRow.contact_id ?? '',
+      lines: lineRows.map(row => ({
+        productId: row.product_id ?? '',
+        productName: row.description,
+        unitPrice: String(row.unit_price),
+        quantity: Number(row.quantity),
+        subtotal: String(row.line_total),
+      })),
+      subtotal,
+      status: 'invoiced' as const,
+      notes: orderRow.notes ?? undefined,
+      createdAt: orderRow.created_at,
+      updatedAt: orderRow.updated_at,
+    },
+    tenant: {
+      id: tenantId,
+      name: tenantConfig.name,
+      walletAddress: tenantConfig.merchantWallet,
+      country: tenantConfig.country,
+      isApproved: true,
+      createdAt: new Date().toISOString(),
+      taxId: rif,
+      taxIdLabel: engine.taxIdLabel,
+      address: tenantConfig.address || undefined,
+      phone: tenantConfig.phone || undefined,
+      email: tenantConfig.email || undefined,
+    },
+    buyer: {
+      name: buyerName,
+      taxId: buyerTaxId,
+      phone: buyerPhone,
+      email: buyerEmail,
+    },
+    currency: orderRow.currency ?? 'USD',
+    isForexPayment: true,
+    invoiceNumber: String(invoiceNumber),
+    notes: orderRow.notes ?? undefined,
+  })
+
+  // Safety net: every error path the engine can hit (empty RIF, no lines,
+  // non-positive total) is pre-checked above so no number is burned. If this
+  // ever fires, the number is lost by design — gaps are auditable, duplicates
+  // are not (see migration 002).
+  const validation = invoiceFactory.validate(tenantConfig.country, invoiceDoc)
+  if (!validation.valid) {
+    throw new StoreError('conflict', 'Factura inválida: ' + validation.errors.map(e => e.message).join('; '))
+  }
+
+  const { error: invoiceError } = await supabase
+    .from('invoices')
+    .insert({
+      tenant_id: tenantId,
+      order_id: orderId,
+      invoice_number: invoiceDoc.number,
+      status: 'draft',
+      subtotal: invoiceDoc.subtotal,
+      tax_amount: invoiceDoc.taxLines.find(t => t.key === 'IVA')?.amount ?? '0',
+      igtf_amount: invoiceDoc.taxLines.find(t => t.key === 'IGTF')?.amount ?? '0',
+      total: invoiceDoc.total,
+      currency: invoiceDoc.currency,
+      tenant_snapshot: {
+        name: tenantConfig.name,
+        taxId: rif,
+        address: tenantConfig.address || null,
+        phone: tenantConfig.phone || null,
+        email: tenantConfig.email || null,
+      },
+      buyer_snapshot: {
+        name: buyerName,
+        taxId: buyerTaxId ?? null,
+        phone: buyerPhone ?? null,
+        email: buyerEmail ?? null,
+        address: buyerAddress ?? null,
+      },
+      fiscal_data: invoiceDoc.fiscalData ?? {},
+    })
+  if (invoiceError) throw toStoreError(invoiceError, 'invoices')
+
+  return invoiceDoc
 }
 
 // ── Stock ──────────────────────────────────────────────────────────────────
@@ -341,6 +553,111 @@ async function writeChargeForOrder(
   throw toStoreError(error, 'charges')
 }
 
+// ── Customers ────────────────────────────────────────────────────────────
+
+/** Buyer fields the order form carries into the customer step. */
+interface BuyerSnapshotInput {
+  contactId?: string
+  buyerName: string
+  buyerPhone?: string
+  buyerTaxId?: string
+  buyerEmail?: string
+  buyerAddress?: string
+}
+
+/**
+ * Non-empty form values that differ from the stored row. Empty form fields
+ * never blank stored data: a merchant editing only the phone must not wipe
+ * the tax ID they typed last month.
+ */
+function customerPatchForSnapshot(
+  current: Customer | undefined,
+  snapshot: { name: string; phone?: string; email?: string; taxId?: string; address?: string },
+): Partial<Customer> {
+  const patch: Partial<Customer> = {}
+  const name = snapshot.name.trim()
+  if (name && name !== current?.name) patch.name = name
+  const phone = (snapshot.phone ?? '').trim()
+  if (phone && phone !== (current?.phone ?? '')) patch.phone = phone
+  const email = (snapshot.email ?? '').trim()
+  if (email && email !== (current?.email ?? '')) patch.email = email
+  const taxId = (snapshot.taxId ?? '').trim()
+  if (taxId && taxId !== (current?.taxId ?? '')) patch.taxId = taxId
+  const address = (snapshot.address ?? '').trim()
+  if (address && address !== (current?.address ?? '')) patch.address = address
+  return patch
+}
+
+/**
+ * Resolve the contacts row for a new order BEFORE the order row is inserted.
+ *
+ *  - Explicit contactId: link it; when `save` is set, also push the form's
+ *    non-empty fields into that same row (never any other row).
+ *  - No contactId: deterministic match (see matchCustomer). A match links
+ *    read-only, or updates + links when `save` is set. No match + `save`
+ *    inserts a new row. No match + no `save` leaves the order unlinked.
+ *
+ * Throws on any contact write failure: the caller must surface that instead
+ * of inserting an order silently detached from its buyer.
+ */
+async function resolveCustomerForOrder(
+  known: Customer[],
+  input: BuyerSnapshotInput,
+  save: boolean,
+  persist: {
+    insert: (c: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Customer>
+    update: (id: string, patch: Partial<Customer>) => Promise<Customer>
+  },
+): Promise<string | null> {
+  const snapshot = {
+    name: input.buyerName,
+    phone: input.buyerPhone,
+    email: input.buyerEmail,
+    taxId: input.buyerTaxId,
+    address: input.buyerAddress,
+  }
+
+  if (input.contactId) {
+    if (save) {
+      const linked = known.find(c => c.id === input.contactId)
+      // A stale id (row deleted elsewhere) links as-is: the orders FK rejects
+      // a truly dangling id with a conflict the UI shows, instead of this
+      // step inventing a replacement row.
+      if (linked) {
+        const patch = customerPatchForSnapshot(linked, snapshot)
+        if (Object.keys(patch).length > 0) {
+          await persist.update(linked.id, patch)
+        }
+      }
+    }
+    return input.contactId
+  }
+
+  if (!snapshot.name.trim()) return null
+
+  const matched = matchCustomer(known, snapshot)
+  if (matched) {
+    if (save) {
+      const patch = customerPatchForSnapshot(matched, snapshot)
+      if (Object.keys(patch).length > 0) {
+        await persist.update(matched.id, patch)
+      }
+    }
+    return matched.id
+  }
+
+  if (!save) return null
+
+  const created = await persist.insert({
+    name: snapshot.name.trim(),
+    phone: (snapshot.phone ?? '').trim() || undefined,
+    email: (snapshot.email ?? '').trim() || undefined,
+    taxId: (snapshot.taxId ?? '').trim() || undefined,
+    address: (snapshot.address ?? '').trim() || undefined,
+  })
+  return created.id
+}
+
 // ── Hook ───────────────────────────────────────────────────────────────────
 
 /**
@@ -353,6 +670,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
   const [merchantAddress, setMerchantAddress] = useState('')
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<Order[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [config, setConfig] = useState<BusinessConfig>(DEFAULT_CONFIG)
   const [error, setError] = useState<StoreError | null>(null)
   /** Tenant the data currently in state belongs to. */
@@ -362,6 +680,9 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
   // is not this tenant's data yet. Setting it inside the effect would cascade
   // a render; deriving it cannot.
   const loading = tenantId !== undefined && loadedTenant !== tenantId
+  // Customers ride the same initial read, so their loading window is the same
+  // one — the order form tells "cargando clientes" from "sin clientes" apart.
+  const customersLoading = loading
 
   // Incremented per load so a response that arrives after the tenant changed
   // (or after unmount) cannot write stale rows into state.
@@ -388,12 +709,14 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
       fetchConfig(currentTenant),
       fetchProducts(currentTenant),
       fetchOrders(currentTenant),
+      fetchCustomers(currentTenant),
     ])
-      .then(([nextConfig, nextProducts, nextOrders]) => {
+      .then(([nextConfig, nextProducts, nextOrders, nextCustomers]) => {
         if (!isCurrent()) return
         setConfig(nextConfig)
         setProducts(nextProducts)
         setOrders(nextOrders)
+        setCustomers(nextCustomers)
         setError(null)
       })
       .catch((thrown: unknown) => {
@@ -537,14 +860,94 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     await updateStock(productId, variantId, qty)
   }, [updateStock])
 
+  // ── Customers ────────────────────────────────────────────────────────
+
+  const updateCustomer = useCallback(async (id: string, patch: Partial<Customer>): Promise<Customer> => {
+    const columns = customerToColumns(patch)
+    if (columns.name !== undefined && !columns.name.trim()) {
+      throw new StoreError('conflict', 'El nombre del cliente es requerido.')
+    }
+    const { data, error } = await supabase
+      .from('contacts')
+      .update(columns)
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error) throw toStoreError(error, 'contacts')
+
+    const updated = customerRowToStore(data)
+    setCustomers(prev => prev.map(customer => (customer.id === id ? updated : customer)))
+    return updated
+  }, [])
+
+  const addCustomer = useCallback(async (input: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Promise<Customer> => {
+    const currentTenant = requireTenant()
+    const name = input.name.trim()
+    if (!name) {
+      throw new StoreError('conflict', 'El nombre del cliente es requerido.')
+    }
+    // Last-line duplicate guard: an exact normalized match (name + phone /
+    // tax ID / email) is updated with the new data instead of inserted twice.
+    // matchCustomer only returns same-name rows sharing an identifier, so this
+    // never merges two different people.
+    const matched = matchCustomer(customers, {
+      name,
+      phone: input.phone,
+      email: input.email,
+      taxId: input.taxId,
+      address: input.address,
+    })
+    if (matched) {
+      const patch = customerPatchForSnapshot(matched, {
+        name,
+        phone: input.phone,
+        email: input.email,
+        taxId: input.taxId,
+        address: input.address,
+      })
+      if (Object.keys(patch).length === 0) return matched
+      return updateCustomer(matched.id, patch)
+    }
+
+    const { data, error } = await supabase
+      .from('contacts')
+      .insert({
+        tenant_id: currentTenant,
+        name,
+        phone: input.phone?.trim() || null,
+        email: input.email?.trim() || null,
+        tax_id: input.taxId?.trim() || null,
+        address: input.address?.trim() || null,
+        notes: input.notes?.trim() || null,
+      })
+      .select('*')
+      .single()
+    if (error) throw toStoreError(error, 'contacts')
+
+    const created = customerRowToStore(data)
+    setCustomers(prev => insertCustomerSorted(prev, created))
+    return created
+  }, [requireTenant, customers, updateCustomer])
+
   // ── Orders ─────────────────────────────────────────────────────────────
 
   const addOrder = useCallback(async (
     input: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>,
+    options?: AddOrderCustomerOptions,
   ): Promise<Order> => {
     const currentTenant = requireTenant()
 
     const split = splitTotals(input.subtotal, input.total, config.applyIgtf)
+
+    // Customer step FIRST: resolve or save/update the contacts row before any
+    // order row exists. A contact failure rejects here — the order is never
+    // inserted silently detached from its buyer.
+    const contactId = await resolveCustomerForOrder(
+      customers,
+      input,
+      options?.saveCustomer === true,
+      { insert: addCustomer, update: updateCustomer },
+    )
 
     // order_number is UNIQUE per tenant and there is no counter column or RPC
     // for orders. Read the tenant's current maximum and retry on collision.
@@ -572,6 +975,8 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
           currency: input.currency ?? 'USD',
           buyer_name: input.buyerName,
           buyer_phone: input.buyerPhone || null,
+          buyer_tax_id: (input.buyerTaxId ?? '').trim() || null,
+          contact_id: contactId,
           notes: input.notes ?? null,
           source: 'dashboard',
         })
@@ -626,10 +1031,23 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
         `La orden ${orderRow.order_number} se creó pero no se descontó el stock de: ${failures.join('; ')}`))
     }
 
-    const created = orderRowToStore(orderRow, input.lines, undefined)
+    // Fiscal invoicing is NOT triggered here: NewOrderForm creates orders as
+    // draft and the invoice is generated on the payment-link transition in
+    // updateOrder (draft → pending_payment / DB invoiced). Generating here
+    // would burn fiscal numbers on orders that may never be paid.
+    const stored = orderRowToStore(orderRow, input.lines, undefined)
+    // Email/address have no orders columns: echo the form's values onto the
+    // returned order so the UI sees the same buyer it just saved on the
+    // linked contact row (a reload re-reads them from that row at invoice
+    // time — see generateInvoiceForOrder).
+    const created: Order = {
+      ...stored,
+      buyerEmail: (input.buyerEmail ?? '').trim() || undefined,
+      buyerAddress: (input.buyerAddress ?? '').trim() || undefined,
+    }
     setOrders(prev => [created, ...prev])
     return created
-  }, [requireTenant, config.applyIgtf, updateStock])
+  }, [requireTenant, config.applyIgtf, updateStock, customers, addCustomer, updateCustomer])
 
   const updateOrder = useCallback(async (id: string, patch: Partial<Order>): Promise<Order> => {
     const currentTenant = requireTenant()
@@ -688,6 +1106,21 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     const lines = await fetchLines(id)
     const updated = orderRowToStore(orderRow, lines, charge)
     setOrders(prev => prev.map(order => (order.id === id ? updated : order)))
+
+    // Fiscal trigger: the payment-link transition (UI pending_payment → DB
+    // invoiced) is what makes an order ready for payment, so the invoice is
+    // generated here and only here — never on order creation. The order and
+    // charge writes above are already durable: an invoice failure surfaces as
+    // store error state instead of rejecting the whole mutation.
+    if (patch.status === 'pending_payment' && orderRow.status === 'invoiced') {
+      try {
+        await generateInvoiceForOrder(currentTenant, id)
+      } catch (thrown) {
+        setError(new StoreError('conflict',
+          `La orden ${orderRow.order_number} se actualizó pero no se generó la factura: ${asStoreError(thrown).message}`))
+      }
+    }
+
     return updated
   }, [requireTenant, config.applyIgtf])
 
@@ -710,8 +1143,10 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     merchantAddress,
     products,
     orders,
+    customers,
     config,
     loading,
+    customersLoading,
     error,
     connect,
     disconnect,
@@ -725,6 +1160,8 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     releaseStock,
     addOrder,
     updateOrder,
+    addCustomer,
+    updateCustomer,
     updateConfig,
   }
 }

@@ -16,13 +16,16 @@
 
 import type {
   Charge as ChargeRow,
+  Contact as ContactRow,
   Order as OrderRow,
   OrderLine as OrderLineRow,
   Product as ProductRow,
   Tenant,
 } from '../lib/database.types'
+import type { CountryCode } from '../modules/shared/types'
 import type {
   BusinessConfig,
+  Customer,
   FieldDefinition,
   FieldType,
   Order,
@@ -273,6 +276,11 @@ export function orderRowToStore(
     orderNumber: row.order_number,
     buyerName: row.buyer_name ?? '',
     buyerPhone: row.buyer_phone ?? '',
+    // orders.contact_id / buyer_tax_id are the durable buyer link; email and
+    // address have no order columns and come from the linked contact row (see
+    // generateInvoiceForOrder in ./index.ts), so they stay undefined here.
+    contactId: row.contact_id ?? undefined,
+    buyerTaxId: row.buyer_tax_id ?? undefined,
     lines,
     subtotal: toText(row.subtotal),
     taxAmount: toText(row.tax_amount),
@@ -314,6 +322,15 @@ export function orderToColumns(order: Partial<Order>, applyIgtf: boolean): Parti
   if (order.status !== undefined) columns.status = STORE_TO_DB_ORDER_STATUS[order.status]
   if (order.buyerName !== undefined) columns.buyer_name = order.buyerName
   if (order.buyerPhone !== undefined) columns.buyer_phone = order.buyerPhone
+  // contactId is string|undefined: undefined means "untouched", a value means
+  // "link". There is no unlink path from the UI (orders keep their buyer).
+  if (order.contactId !== undefined) columns.contact_id = order.contactId
+  // Empty tax ID becomes NULL, not '': a cleared field must read back as
+  // "no tax ID", and '' would fail country format checks downstream.
+  if (order.buyerTaxId !== undefined) columns.buyer_tax_id = order.buyerTaxId.trim() || null
+  // buyerEmail / buyerAddress intentionally absent: orders has no columns for
+  // them. They are written to the linked contact row (see resolveCustomerForOrder
+  // in ./index.ts) and read back from it at invoice time.
   if (order.notes !== undefined) columns.notes = order.notes
   if (order.currency !== undefined) columns.currency = order.currency
   if (order.subtotal !== undefined) columns.subtotal = order.subtotal
@@ -328,6 +345,20 @@ export function orderToColumns(order: Partial<Order>, applyIgtf: boolean): Parti
 
 // ── Tenant / config ────────────────────────────────────────────────────────
 
+const KNOWN_COUNTRY_CODES: readonly string[] = ['VE', 'AR', 'MX', 'CO', 'CL']
+
+/**
+ * tenants.country is free text; the UI speaks CountryCode. Unknown or empty
+ * values fall back to 'VE' (the only registered engine today) rather than
+ * crashing the settings form on legacy rows.
+ */
+export function toCountryCode(value: string | null | undefined): CountryCode {
+  const normalized = (value ?? '').trim().toUpperCase()
+  return (KNOWN_COUNTRY_CODES).includes(normalized)
+    ? (normalized as CountryCode)
+    : 'VE'
+}
+
 export function tenantRowToConfig(row: Tenant): BusinessConfig {
   return {
     name: row.business_name,
@@ -339,6 +370,7 @@ export function tenantRowToConfig(row: Tenant): BusinessConfig {
     merchantWallet: row.merchant_wallet_address ?? '',
     invoicePrefix: row.invoice_prefix,
     applyIgtf: row.apply_igtf,
+    country: toCountryCode(row.country),
   }
 }
 
@@ -365,7 +397,121 @@ export function configToTenantColumns(patch: Partial<BusinessConfig>): Partial<T
   if (patch.merchantWallet !== undefined) columns.merchant_wallet_address = patch.merchantWallet || null
   if (patch.invoicePrefix !== undefined) columns.invoice_prefix = patch.invoicePrefix
   if (patch.applyIgtf !== undefined) columns.apply_igtf = patch.applyIgtf
+  // `country` is inside the authenticated UPDATE grant (migration 001), so
+  // the merchant can switch fiscal profile without a schema change.
+  if (patch.country !== undefined) columns.country = patch.country
   return columns
+}
+
+// ── Customers (contacts) ───────────────────────────────────────────────────
+
+/**
+ * contacts row → UI Customer. The ONLY place snake_case contact columns are
+ * read; nothing in the UI touches a Contact row directly.
+ */
+export function customerRowToStore(row: ContactRow): Customer {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone ?? undefined,
+    email: row.email ?? undefined,
+    taxId: row.tax_id ?? undefined,
+    address: row.address ?? undefined,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+/**
+ * UI Customer → contacts columns. Empty strings become NULL (same convention
+ * as configToTenantColumns): the order form round-trips whole profiles, and
+ * writing '' would make "cleared" indistinguishable from "never set".
+ */
+export function customerToColumns(customer: Partial<Customer>): Partial<ContactRow> {
+  const columns: Partial<ContactRow> = {}
+  if (customer.name !== undefined) columns.name = customer.name
+  if (customer.phone !== undefined) columns.phone = customer.phone.trim() || null
+  if (customer.email !== undefined) columns.email = customer.email.trim() || null
+  if (customer.taxId !== undefined) columns.tax_id = customer.taxId.trim() || null
+  if (customer.address !== undefined) columns.address = customer.address.trim() || null
+  if (customer.notes !== undefined) columns.notes = customer.notes.trim() || null
+  return columns
+}
+
+// ── Customer matching ──────────────────────────────────────────────────────
+
+/** Collapse case/whitespace so "  Neumáticos  EL centro " matches itself. */
+export function normalizeCustomerName(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** Digits only, so "+58 412-000 0000" matches "584120000000". */
+export function normalizePhoneDigits(value: string | null | undefined): string {
+  return (value ?? '').replace(/\D/g, '')
+}
+
+/** Uppercase, no whitespace: "j-12345678-9" matches "J-12345678-9". */
+export function normalizeTaxId(value: string | null | undefined): string {
+  return (value ?? '').trim().toUpperCase().replace(/\s+/g, '')
+}
+
+/** Lowercase, trimmed: emails are case-insensitive by convention. */
+export function normalizeEmail(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase()
+}
+
+/** The buyer snapshot the order form hands to the matcher. */
+export interface CustomerSnapshot {
+  name: string
+  phone?: string
+  email?: string
+  taxId?: string
+  address?: string
+}
+
+/**
+ * Deterministic duplicate guard: find the saved customer that IS this buyer.
+ *
+ * Rules, in order:
+ *  1. The normalized name must match exactly — a name miss is never a match,
+ *     no fuzzy logic, no invention.
+ *  2. When the snapshot carries identifiers (phone digits / tax ID / email),
+ *     at least one of them must also match. Same name + no shared identifier
+ *     means "different person with the same name": return undefined so the
+ *     caller inserts instead of overwriting an unrelated row.
+ *  3. When the snapshot carries NO identifier, match only if exactly one
+ *     saved customer has that name — otherwise the match is ambiguous and the
+ *     caller must insert (or let the merchant pick).
+ *
+ * First match in array order wins, so callers pass a stably-sorted list.
+ */
+export function matchCustomer(
+  candidates: Customer[],
+  snapshot: CustomerSnapshot,
+): Customer | undefined {
+  const name = normalizeCustomerName(snapshot.name)
+  if (!name) return undefined
+  const sameName = candidates.filter(c => normalizeCustomerName(c.name) === name)
+  if (sameName.length === 0) return undefined
+
+  const phone = normalizePhoneDigits(snapshot.phone)
+  const taxId = normalizeTaxId(snapshot.taxId)
+  const email = normalizeEmail(snapshot.email)
+  const hasIdentifiers = phone !== '' || taxId !== '' || email !== ''
+
+  if (!hasIdentifiers) {
+    return sameName.length === 1 ? sameName[0] : undefined
+  }
+
+  return sameName.find(c => {
+    const candidatePhone = normalizePhoneDigits(c.phone)
+    const candidateTaxId = normalizeTaxId(c.taxId)
+    const candidateEmail = normalizeEmail(c.email)
+    return (phone !== '' && candidatePhone !== '' && candidatePhone === phone)
+      || (taxId !== '' && candidateTaxId !== '' && candidateTaxId === taxId)
+      || (email !== '' && candidateEmail !== '' && candidateEmail === email)
+  })
 }
 
 // ── Order numbers ──────────────────────────────────────────────────────────

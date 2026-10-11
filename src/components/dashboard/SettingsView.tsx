@@ -1,11 +1,24 @@
 /**
- * SettingsView — configuración del negocio, datos fiscales Venezuela (RIF),
- * wallet y preferencias de facturación.
+ * SettingsView — configuración del negocio, datos fiscales según el país
+ * fiscal elegido (RIF / CUIT / RFC según el motor registrado), wallet y
+ * preferencias de facturación.
  */
 
 import { useState } from 'react'
 import { Check, AlertCircle, Building2, Receipt, Wallet, ToggleLeft, ToggleRight } from 'lucide-react'
 import type { DashboardStore } from '@/store'
+import { invoiceFactory } from '@/modules/invoicing/factory'
+import type { InvoiceEngine } from '@/modules/invoicing'
+import type { CountryCode } from '@/modules/shared/types'
+
+/**
+ * Fiscal engine driving the labels below. Sourced from the registered invoice
+ * engines — never a hardcoded country list — so adding an engine (AR, MX, …)
+ * automatically adds a fiscal profile here.
+ */
+function engineForCountry(country: CountryCode): InvoiceEngine | undefined {
+  return invoiceFactory.list().find(engine => engine.country === country)
+}
 
 // ── Section wrapper — top-level to avoid "component in render" lint ────────
 
@@ -35,6 +48,9 @@ export default function SettingsView({ store, onTenantUpdate }: SettingsViewProp
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const engines = invoiceFactory.list()
+  const fiscalEngine = engineForCountry(form.country) ?? engines[0]
 
   const patch = (k: keyof typeof form, v: string | boolean) =>
     setForm(f => ({ ...f, [k]: v }))
@@ -90,26 +106,55 @@ export default function SettingsView({ store, onTenantUpdate }: SettingsViewProp
         </div>
       </Section>
 
-      {/* Venezuelan fiscal data */}
-      <Section icon={<Receipt className="size-4" />} title="Datos fiscales — Venezuela">
-        <div
-          className="rounded-xl px-3 py-2.5 text-xs"
-          style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', color: 'var(--muted)' }}
-        >
-          El módulo de facturación Venezuela calcula IVA 16% + IGTF 3% automáticamente.
-          El RIF aparece en todas las facturas emitidas.
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-            RIF <span className="font-normal opacity-60">(J-12345678-9 / V-12345678)</span>
-          </label>
-          <input
-            className={inputCls} style={inputStyle}
-            value={form.rif}
-            onChange={e => patch('rif', e.target.value.toUpperCase())}
-            placeholder="J-12345678-9"
-          />
-        </div>
+      {/* Fiscal data — country-aware */}
+      <Section icon={<Receipt className="size-4" />} title={`Datos fiscales — ${fiscalEngine?.countryName ?? 'Sin motor'}`}>
+        {engines.length === 0 ? (
+          <div
+            className="rounded-xl px-3 py-2.5 text-xs"
+            style={{ background: 'rgba(186,43,76,0.08)', border: '1px solid rgba(186,43,76,0.2)', color: 'var(--danger)' }}
+          >
+            No hay motores de facturación registrados. No se pueden emitir facturas.
+          </div>
+        ) : (
+          <>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>País fiscal</label>
+              <select
+                className={inputCls} style={inputStyle}
+                value={form.country}
+                onChange={e => patch('country', e.target.value)}
+              >
+                {engines.map(engine => (
+                  <option key={engine.country} value={engine.country}>
+                    {engine.countryName} ({engine.country}) — {engine.taxIdLabel}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {fiscalEngine && (
+              <>
+                <div
+                  className="rounded-xl px-3 py-2.5 text-xs"
+                  style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', color: 'var(--muted)' }}
+                >
+                  El módulo de facturación {fiscalEngine.countryName} calcula los impuestos automáticamente.
+                  El {fiscalEngine.taxIdLabel} aparece en todas las facturas emitidas.
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                    {fiscalEngine.taxIdLabel} <span className="font-normal opacity-60">({fiscalEngine.taxIdExample})</span>
+                  </label>
+                  <input
+                    className={inputCls} style={inputStyle}
+                    value={form.rif}
+                    onChange={e => patch('rif', e.target.value.toUpperCase())}
+                    placeholder={fiscalEngine.taxIdPlaceholder}
+                  />
+                </div>
+              </>
+            )}
+          </>
+        )}
         <div>
           <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Prefijo de factura</label>
           <input
@@ -134,12 +179,17 @@ export default function SettingsView({ store, onTenantUpdate }: SettingsViewProp
           </button>
         </div>
 
-        {!form.rif && (
+        {!form.rif ? (
           <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(217,119,6,0.08)', color: '#b45309', border: '1px solid rgba(217,119,6,0.2)' }}>
             <AlertCircle className="size-3.5 shrink-0" />
-            El RIF es requerido para emitir facturas válidas en Venezuela.
+            El {fiscalEngine?.taxIdLabel ?? 'ID fiscal'} es requerido para emitir facturas válidas{fiscalEngine ? ` en ${fiscalEngine.countryName}` : ''}.
           </div>
-        )}
+        ) : fiscalEngine && !fiscalEngine.validateTaxId(form.rif.trim()) ? (
+          <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(217,119,6,0.08)', color: '#b45309', border: '1px solid rgba(217,119,6,0.2)' }}>
+            <AlertCircle className="size-3.5 shrink-0" />
+            El formato no parece válido. Ej: {fiscalEngine.taxIdExample}
+          </div>
+        ) : null}
       </Section>
 
       {/* Wallet */}

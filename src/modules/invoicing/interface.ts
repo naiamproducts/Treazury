@@ -139,6 +139,39 @@ export interface InvoiceEngine {
   readonly supportedCurrencies: readonly string[]
 
   /**
+   * Issuer (business) fiscal-ID metadata for this country.
+   * Venezuela: label 'RIF', placeholder 'J-12345678-9'.
+   * Argentina: label 'CUIT', placeholder '30-12345678-9'.
+   * Mexico: label 'RFC', placeholder 'AAA010101AAA'.
+   */
+  readonly taxIdLabel: string
+  readonly taxIdPlaceholder: string
+  readonly taxIdExample: string
+
+  /**
+   * Buyer fiscal-ID metadata. Often the same document as the issuer's (VE:
+   * RIF), but some countries distinguish them (AR: a buyer may identify with
+   * DNI while the issuer uses CUIT), so buyer and issuer metadata stay
+   * separate on purpose.
+   */
+  readonly buyerTaxIdLabel: string
+  readonly buyerTaxIdPlaceholder: string
+  readonly buyerTaxIdExample: string
+
+  /**
+   * Country-specific issuer tax-ID format check (syntax only, never a fiscal
+   * lookup). Used to reject a bad ID before a fiscal number is burned.
+   */
+  validateTaxId(taxId: string): boolean
+
+  /**
+   * Country-specific buyer tax-ID format check (syntax only). An empty value
+   * is valid — buyer identity may be partial for informal commerce — so this
+   * only validates non-empty input.
+   */
+  validateBuyerTaxId(taxId: string): boolean
+
+  /**
    * Build and compute a complete InvoiceDocument from an order.
    * Does NOT persist — persistence is the caller's responsibility.
    */

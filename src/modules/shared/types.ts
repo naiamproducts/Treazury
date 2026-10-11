@@ -22,6 +22,15 @@ export interface Tenant {
   /** True while the tenant is in the approved whitelist. */
   isApproved: boolean
   createdAt: string
+  /** Issuer tax ID (RIF / CUIT / RFC / NIT depending on country). Optional so
+   *  existing tenants and callers that only know the core fields keep working;
+   *  the Venezuela engine treats a missing value as "not configured". */
+  taxId?: string
+  /** Human label for the tax ID ("RIF" / "CUIT" / "RFC" / "NIT"). */
+  taxIdLabel?: string
+  address?: string
+  phone?: string
+  email?: string
 }
 
 // ─────────────────────────────────────────────

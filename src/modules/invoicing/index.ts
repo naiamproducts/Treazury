@@ -11,4 +11,4 @@ export type {
 } from './interface'
 
 export { invoiceFactory } from './factory'
-export { VenezuelaInvoiceEngine } from './engines/venezuela'
+export { VenezuelaInvoiceEngine, isValidVenezuelanRIF } from './engines/venezuela'
