@@ -4,25 +4,32 @@
 -- ============================================================
 --
 -- Problem
---   products.tax_rate and order_lines.tax_rate are numeric(5,4), which caps at
---   9.9999. The launch market is Venezuela: IVA is 16% and IGTF is 3%. Writing
---   the rate as a percentage overflows the column:
+--   products.tax_rate and order_lines.tax_rate were numeric(5,4), capping at
+--   9.9999.
 --
---     ERROR: 22003 numeric field overflow
---     DETAIL: A field with precision 5, scale 4 must round to an absolute
---             value less than 10^1.
+-- Correcting an earlier diagnosis: this migration was originally written as a
+-- critical bug fix, on the assumption that the rate is stored as a percentage
+-- (16 for IVA, 3 for IGTF), which would overflow the column:
 --
---   This is not a rounding nuisance — every insert of a taxed line fails.
+--   ERROR: 22003 numeric field overflow
 --
--- Fix
---   numeric(7,4) holds up to 999.9999, covering IVA, IGTF and any future rate
---   while keeping 4 decimal places.
+-- That overflow was real, but it was produced by a hand-written test that wrote
+-- 16. The application never does. tax_rate is a FRACTION: the column default is
+-- 0.16 and src/store/mappers.ts deliberately omits the field so that default
+-- applies. numeric(5,4) held fractions comfortably, so no application write was
+-- ever failing. There was no bug to fix.
 --
---   Deliberately NOT rescaling existing values. The column was unusable at
---   its current width, so no real percentage could have been stored; any rows
---   present hold a fraction or zero and are left untouched. The rate is stored
---   as a percentage (16, not 0.16) — documented here because that convention
---   is the thing a future contributor is most likely to get wrong.
+-- What this migration actually does
+--   Adds headroom. 0.16 needs 4 decimal places to stay exact, and a
+--   scale-limited column makes precision harder to reason about as the schema
+--   grows. The values are unchanged — no rescale, and no existing row is
+--   touched.
+--
+-- Convention, stated because it is genuinely easy to get wrong
+--   tax_rate is a fraction, not a percentage: Venezuela's 16% IVA is stored as
+--   0.16 and its 3% IGTF as 0.03. If you ever write 16 here you will overflow a
+--   numeric(7,4) column too, and the arithmetic downstream will silently be off
+--   by 100x.
 
 ALTER TABLE public.products
   ALTER COLUMN tax_rate TYPE numeric(7,4);
