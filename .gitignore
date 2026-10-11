@@ -1,0 +1,35 @@
+# ── Secrets ────────────────────────────────────────────────────────────────
+# Never commit these. Tokens in history cannot be un-committed.
+.env
+.env.*
+!.env.example
+
+# ── Node / Bun ─────────────────────────────────────────────────────────────
+node_modules/
+bun.lockb
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# ── Vite build output ──────────────────────────────────────────────────────
+dist/
+dist-ssr/
+*.local
+
+# ── Foundry ────────────────────────────────────────────────────────────────
+# Build artifacts + local cache. Sources and ABI JSON are tracked.
+contracts/out/
+contracts/cache/
+broadcast/
+!contracts/out/**/*.json
+
+# ── Logs and traces ────────────────────────────────────────────────────────
+*.jsonl
+!package.json
+
+# ── Editors / OS ───────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,504 @@
+/**
+ * CatalogView — gestión de productos con campos dinámicos, variantes y stock.
+ */
+
+import React, { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Plus, Pencil, Trash2, Package, ChevronDown, ChevronUp,
+  X, Check, AlertCircle,
+} from 'lucide-react'
+import type { DashboardStore, Product, ProductVariant, FieldDefinition } from '@/store'
+
+// ── helpers ────────────────────────────────────────────────────────────────
+
+function newVariant(): ProductVariant {
+  return { id: Math.random().toString(36).slice(2, 8), label: '', stock: 0 }
+}
+
+function newFieldDef(): FieldDefinition {
+  return { key: '', label: '', type: 'text' }
+}
+
+const UNITS = ['unidad', 'docena', 'caja', 'par', 'litro', 'kg', 'metro', 'rollo', 'juego']
+
+// ── Stock badge ────────────────────────────────────────────────────────────
+
+function StockBadge({ stock }: { stock: number }) {
+  const color = stock === 0
+    ? { bg: 'rgba(186,43,76,0.1)', fg: 'var(--danger)' }
+    : stock < 5
+    ? { bg: 'rgba(217,119,6,0.1)', fg: '#b45309' }
+    : { bg: 'rgba(26,128,71,0.1)', fg: 'var(--success)' }
+  return (
+    <span
+      className="rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums"
+      style={{ background: color.bg, color: color.fg }}
+    >
+      {stock} {stock === 1 ? 'u.' : 'u.'}
+    </span>
+  )
+}
+
+// ── Product form (add/edit) ────────────────────────────────────────────────
+
+interface ProductFormProps {
+  initial?: Product
+  onSave: (data: Omit<Product, 'id' | 'createdAt'>) => void
+  onCancel: () => void
+}
+
+function ProductForm({ initial, onSave, onCancel }: ProductFormProps) {
+  const [name, setName] = useState(initial?.name ?? '')
+  const [sku, setSku] = useState(initial?.sku ?? '')
+  const [description, setDescription] = useState(initial?.description ?? '')
+  const [price, setPrice] = useState(initial?.price ?? '')
+  const [unit, setUnit] = useState(initial?.unit ?? 'unidad')
+  const [stock, setStock] = useState(String(initial?.stock ?? 0))
+  const [variants, setVariants] = useState<ProductVariant[]>(initial?.variants ?? [])
+  const [fieldDefs, setFieldDefs] = useState<FieldDefinition[]>(initial?.fieldDefs ?? [])
+  const [customFields, setCustomFields] = useState<Record<string, string | number | boolean>>(initial?.customFields ?? {})
+  const [showVariants, setShowVariants] = useState((initial?.variants.length ?? 0) > 0)
+  const [showCustomFields, setShowCustomFields] = useState((initial?.fieldDefs.length ?? 0) > 0)
+  const [error, setError] = useState('')
+
+  const handleSave = () => {
+    if (!name.trim()) { setError('El nombre es requerido.'); return }
+    if (!price || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
+      setError('Ingresa un precio válido.'); return
+    }
+    const totalStock = variants.length > 0
+      ? variants.reduce((s, v) => s + v.stock, 0)
+      : parseInt(stock, 10) || 0
+
+    onSave({
+      name: name.trim(), sku: sku.trim() || undefined,
+      description: description.trim() || undefined,
+      price: parseFloat(price).toFixed(2),
+      unit, stock: totalStock,
+      variants: variants.filter(v => v.label.trim()),
+      fieldDefs: fieldDefs.filter(f => f.key.trim() && f.label.trim()),
+      customFields,
+    })
+  }
+
+  const addVariant = () => setVariants(v => [...v, newVariant()])
+  const removeVariant = (id: string) => setVariants(v => v.filter(x => x.id !== id))
+  const patchVariant = (id: string, patch: Partial<ProductVariant>) =>
+    setVariants(v => v.map(x => x.id === id ? { ...x, ...patch } : x))
+
+  const addFieldDef = () => setFieldDefs(f => [...f, newFieldDef()])
+  const removeFieldDef = (idx: number) => {
+    const removed = fieldDefs[idx]
+    setFieldDefs(f => f.filter((_, i) => i !== idx))
+    setCustomFields(cf => { const c = { ...cf }; delete c[removed.key]; return c })
+  }
+  const patchFieldDef = (idx: number, patch: Partial<FieldDefinition>) => {
+    setFieldDefs(f => f.map((x, i) => i === idx ? { ...x, ...patch } : x))
+  }
+
+  const inputCls = "w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-all focus:ring-2"
+  const inputStyle = {
+    background: 'var(--surface-muted)',
+    border: '1px solid var(--border)',
+    color: 'var(--ink)',
+  }
+
+  return (
+    <div
+      className="overflow-hidden rounded-3xl"
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)', backdropFilter: 'blur(20px)' }}
+    >
+      {/* Rainbow strip */}
+      <div style={{ height: 3, background: 'linear-gradient(90deg,#6366f1,#8b5cf6,#ec4899,#f59e0b,#10b981)', borderRadius: '3px 3px 0 0' }} />
+
+      <div className="p-5 space-y-4">
+        <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>
+          {initial ? 'Editar producto' : 'Nuevo producto'}
+        </h3>
+
+        {/* Basic fields */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Nombre *</label>
+            <input className={inputCls} style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Neumático 205/55R16" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>SKU (opcional)</label>
+            <input className={inputCls} style={inputStyle} value={sku} onChange={e => setSku(e.target.value)} placeholder="NEU-205-55R16" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Unidad</label>
+            <select className={inputCls} style={inputStyle} value={unit} onChange={e => setUnit(e.target.value)}>
+              {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Precio base (USD) *</label>
+            <input className={inputCls} style={inputStyle} inputMode="decimal" value={price} onChange={e => setPrice(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" />
+          </div>
+          {!showVariants && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Stock</label>
+              <input className={inputCls} style={inputStyle} inputMode="numeric" value={stock} onChange={e => setStock(e.target.value.replace(/\D/g, ''))} placeholder="0" />
+            </div>
+          )}
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Descripción</label>
+            <input className={inputCls} style={inputStyle} value={description} onChange={e => setDescription(e.target.value)} placeholder="Descripción opcional" />
+          </div>
+        </div>
+
+        {/* Variants toggle */}
+        <button
+          type="button"
+          onClick={() => setShowVariants(v => !v)}
+          className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all"
+          style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}
+        >
+          <span>Variantes (medidas, tallas, colores…)</span>
+          {showVariants ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        </button>
+        <AnimatePresence>
+          {showVariants && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="space-y-2 pt-1">
+                {variants.map((v) => (
+                  <div key={v.id} className="flex gap-2">
+                    <input
+                      className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                      style={inputStyle}
+                      value={v.label}
+                      onChange={e => patchVariant(v.id, { label: e.target.value })}
+                      placeholder="Ej: 205/55R16"
+                    />
+                    <input
+                      className="w-20 rounded-xl px-3 py-2 text-sm outline-none tabular-nums"
+                      style={inputStyle}
+                      inputMode="numeric"
+                      value={String(v.stock)}
+                      onChange={e => patchVariant(v.id, { stock: parseInt(e.target.value, 10) || 0 })}
+                      placeholder="Stock"
+                    />
+                    <input
+                      className="w-24 rounded-xl px-3 py-2 text-sm outline-none tabular-nums"
+                      style={inputStyle}
+                      inputMode="decimal"
+                      value={v.price ?? ''}
+                      onChange={e => patchVariant(v.id, { price: e.target.value || undefined })}
+                      placeholder="Precio"
+                    />
+                    <button onClick={() => removeVariant(v.id)} className="rounded-xl p-2 transition-all hover:opacity-70" style={{ color: 'var(--danger)' }}>
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={addVariant}
+                  className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition-all hover:opacity-80"
+                  style={{ background: 'var(--surface-muted)', border: '1px dashed var(--border)', color: 'var(--ink-2)' }}
+                >
+                  <Plus className="size-3.5" /> Agregar variante
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Custom fields toggle */}
+        <button
+          type="button"
+          onClick={() => setShowCustomFields(v => !v)}
+          className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all"
+          style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}
+        >
+          <span>Campos personalizados (marca, índice, etc.)</span>
+          {showCustomFields ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        </button>
+        <AnimatePresence>
+          {showCustomFields && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="space-y-2 pt-1">
+                {fieldDefs.map((fd, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <input
+                      className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                      style={inputStyle}
+                      value={fd.label}
+                      onChange={e => patchFieldDef(idx, { label: e.target.value, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                      placeholder="Nombre del campo (ej: Marca)"
+                    />
+                    <select
+                      className="rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ ...inputStyle, width: 110 }}
+                      value={fd.type}
+                      onChange={e => patchFieldDef(idx, { type: e.target.value as FieldDefinition['type'] })}
+                    >
+                      <option value="text">Texto</option>
+                      <option value="number">Número</option>
+                      <option value="select">Opciones</option>
+                    </select>
+                    <input
+                      className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                      style={inputStyle}
+                      value={String(customFields[fd.key] ?? '')}
+                      onChange={e => setCustomFields(cf => ({ ...cf, [fd.key]: e.target.value }))}
+                      placeholder="Valor"
+                    />
+                    <button onClick={() => removeFieldDef(idx)} className="rounded-xl p-2 transition-all hover:opacity-70" style={{ color: 'var(--danger)' }}>
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={addFieldDef}
+                  className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition-all hover:opacity-80"
+                  style={{ background: 'var(--surface-muted)', border: '1px dashed var(--border)', color: 'var(--ink-2)' }}
+                >
+                  <Plus className="size-3.5" /> Agregar campo
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}>
+            <AlertCircle className="size-3.5 shrink-0" /> {error}
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-2xl py-3 text-sm font-semibold transition-all hover:opacity-80"
+            style={{ background: 'var(--surface-muted)', color: 'var(--ink-2)', border: '1px solid var(--border)' }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-white transition-all hover:scale-[1.01]"
+            style={{ background: 'var(--accent)' }}
+          >
+            <Check className="size-4" />
+            {initial ? 'Guardar cambios' : 'Agregar producto'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Product card ────────────────────────────────────────────────────────────
+
+interface ProductCardProps {
+  product: Product
+  onEdit: () => void
+  onDelete: () => void
+  onStockAdjust: (variantId: string | undefined, delta: number) => void
+}
+
+const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(function ProductCard({ product, onEdit, onDelete, onStockAdjust }, _ref) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      className="overflow-hidden rounded-2xl"
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+    >
+      <div className="flex items-start gap-3 p-4">
+        {/* Icon placeholder */}
+        <div
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl"
+          style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}
+        >
+          <Package className="size-5" style={{ color: 'var(--subtle)' }} />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold" style={{ color: 'var(--ink)' }}>{product.name}</p>
+              {product.sku && (
+                <p className="mono text-xs" style={{ color: 'var(--subtle)' }}>{product.sku}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="display text-sm font-bold tabular-nums" style={{ color: 'var(--ink)' }}>
+                ${parseFloat(product.price).toFixed(2)}
+              </span>
+              <span className="text-xs" style={{ color: 'var(--subtle)' }}>/ {product.unit}</span>
+            </div>
+          </div>
+
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <StockBadge stock={product.stock} />
+            {product.variants.length > 0 && (
+              <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                {product.variants.length} variante{product.variants.length !== 1 ? 's' : ''}
+              </span>
+            )}
+            {Object.entries(product.customFields).slice(0, 2).map(([k, v]) => (
+              <span key={k} className="rounded-full px-2 py-0.5 text-xs" style={{ background: 'var(--surface-muted)', color: 'var(--muted)', border: '1px solid var(--border)' }}>
+                {v as string}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Actions row */}
+      <div className="flex items-center gap-1 border-t px-4 py-2" style={{ borderColor: 'var(--border)' }}>
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all hover:opacity-80"
+          style={{ color: 'var(--muted)' }}
+        >
+          {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          Stock
+        </button>
+        <button onClick={onEdit} className="ml-auto flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all hover:opacity-80" style={{ color: 'var(--muted)' }}>
+          <Pencil className="size-3.5" /> Editar
+        </button>
+        <button onClick={onDelete} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all hover:opacity-80" style={{ color: 'var(--danger)' }}>
+          <Trash2 className="size-3.5" /> Eliminar
+        </button>
+      </div>
+
+      {/* Stock adjuster */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="border-t px-4 pb-3 pt-3 space-y-2" style={{ borderColor: 'var(--border)' }}>
+              {product.variants.length > 0 ? product.variants.map(v => (
+                <div key={v.id} className="flex items-center justify-between">
+                  <span className="text-xs font-medium" style={{ color: 'var(--ink-2)' }}>{v.label}</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => onStockAdjust(v.id, -1)} className="flex size-7 items-center justify-center rounded-lg text-base font-bold transition-all hover:opacity-70" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }}>−</button>
+                    <span className="mono w-8 text-center text-sm tabular-nums" style={{ color: 'var(--ink)' }}>{v.stock}</span>
+                    <button onClick={() => onStockAdjust(v.id, +1)} className="flex size-7 items-center justify-center rounded-lg text-base font-bold transition-all hover:opacity-70" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }}>+</button>
+                  </div>
+                </div>
+              )) : (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium" style={{ color: 'var(--ink-2)' }}>Stock total</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => onStockAdjust(undefined, -1)} className="flex size-7 items-center justify-center rounded-lg text-base font-bold transition-all hover:opacity-70" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }}>−</button>
+                    <span className="mono w-8 text-center text-sm tabular-nums" style={{ color: 'var(--ink)' }}>{product.stock}</span>
+                    <button onClick={() => onStockAdjust(undefined, +1)} className="flex size-7 items-center justify-center rounded-lg text-base font-bold transition-all hover:opacity-70" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }}>+</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+})
+
+// ── Root ────────────────────────────────────────────────────────────────────
+
+export default function CatalogView({ store }: { store: DashboardStore }) {
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const handleSave = (data: Omit<Product, 'id' | 'createdAt'>) => {
+    if (editingId) {
+      store.updateProduct(editingId, data)
+    } else {
+      store.addProduct(data)
+    }
+    setShowForm(false)
+    setEditingId(null)
+  }
+
+  const editingProduct = editingId ? store.products.find(p => p.id === editingId) : undefined
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-4">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>
+            {store.products.length} producto{store.products.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <button
+          onClick={() => { setEditingId(null); setShowForm(true) }}
+          className="flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]"
+          style={{ background: 'var(--accent)' }}
+        >
+          <Plus className="size-4" /> Nuevo producto
+        </button>
+      </div>
+
+      {/* Form */}
+      <AnimatePresence>
+        {(showForm || editingId) && (
+          <motion.div
+            key="form"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+          >
+            <ProductForm
+              initial={editingProduct}
+              onSave={handleSave}
+              onCancel={() => { setShowForm(false); setEditingId(null) }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Product list */}
+      <AnimatePresence mode="popLayout">
+        {store.products.length === 0 && !showForm ? (
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center gap-3 rounded-3xl py-16 text-center"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+          >
+            <Package className="size-10" style={{ color: 'var(--subtle)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--ink-2)' }}>Sin productos todavía</p>
+            <p className="text-xs" style={{ color: 'var(--muted)' }}>Agrega tu primer producto para empezar.</p>
+          </motion.div>
+        ) : (
+          store.products.map(product => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              onEdit={() => { setEditingId(product.id); setShowForm(false) }}
+              onDelete={() => store.deleteProduct(product.id)}
+              onStockAdjust={(variantId, delta) => store.updateStock(product.id, variantId, delta)}
+            />
+          ))
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
