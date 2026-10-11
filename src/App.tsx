@@ -30,7 +30,10 @@ export default function App() {
   const isPaymentLink = params.has('amount') && (params.has('vault') || params.has('to'))
 
   const auth = useAuth()
-  const store = useDashboardStore()
+  // The store reads and writes the signed-in tenant's rows. With no tenant
+  // (signed out, or awaiting approval) it stays empty and issues no queries —
+  // RLS would reject them anyway.
+  const store = useDashboardStore(auth.status === 'authenticated' ? auth.tenant.id : undefined)
   const [stage, setStage] = useState<Stage>('landing')
 
   // ── Payment link (public, no auth needed) ──────────────────────────────
@@ -74,8 +77,9 @@ onSignOut={() => { void auth.signOut() }}
     )
   }
 
-  // ── Authenticated — connect store and show dashboard ────────────────────
-  // Sync tenant data into the in-memory store if not yet connected
+  // ── Authenticated — connect the wallet view and show the dashboard ─────
+  // Local wallet state only: isConnected/merchantAddress are wagmi's, not the
+  // tenant's. config comes from tenants, not from connect().
   if (!store.isConnected) {
     store.connect(auth.tenant.merchant_wallet_address ?? auth.user.id)
   }

@@ -44,7 +44,7 @@ function StockBadge({ stock }: { stock: number }) {
 
 interface ProductFormProps {
   initial?: Product
-  onSave: (data: Omit<Product, 'id' | 'createdAt'>) => void
+  onSave: (data: Omit<Product, 'id' | 'createdAt'>) => Promise<void>
   onCancel: () => void
 }
 
@@ -71,7 +71,9 @@ function ProductForm({ initial, onSave, onCancel }: ProductFormProps) {
       ? variants.reduce((s, v) => s + v.stock, 0)
       : parseInt(stock, 10) || 0
 
-    onSave({
+    // Saving is a network write; failures are reported by the parent, which
+    // owns the store call. Nothing to await here.
+    void onSave({
       name: name.trim(), sku: sku.trim() || undefined,
       description: description.trim() || undefined,
       price: parseFloat(price).toFixed(2),
@@ -424,15 +426,35 @@ const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(function 
 export default function CatalogView({ store }: { store: DashboardStore }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
-  const handleSave = (data: Omit<Product, 'id' | 'createdAt'>) => {
-    if (editingId) {
-      store.updateProduct(editingId, data)
-    } else {
-      store.addProduct(data)
+  // Both branches are network writes now; the form only closes when the
+  // database accepted the row.
+  const handleSave = async (data: Omit<Product, 'id' | 'createdAt'>) => {
+    setError('')
+    try {
+      if (editingId) {
+        await store.updateProduct(editingId, data)
+      } else {
+        await store.addProduct(data)
+      }
+      setShowForm(false)
+      setEditingId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar el producto.')
     }
-    setShowForm(false)
-    setEditingId(null)
+  }
+
+  const handleDelete = (id: string) => {
+    setError('')
+    void store.deleteProduct(id)
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo eliminar el producto.'))
+  }
+
+  const handleStockAdjust = (productId: string, variantId: string | undefined, delta: number) => {
+    setError('')
+    void store.updateStock(productId, variantId, delta)
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo actualizar el stock.'))
   }
 
   const editingProduct = editingId ? store.products.find(p => p.id === editingId) : undefined
@@ -473,9 +495,21 @@ export default function CatalogView({ store }: { store: DashboardStore }) {
         )}
       </AnimatePresence>
 
+      {error && (
+        <div className="flex items-start gap-2 rounded-2xl px-4 py-3 text-xs" style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}>
+          <AlertCircle className="mt-px size-3.5 shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError('')}><X className="size-3.5" /></button>
+        </div>
+      )}
+
+      {store.loading && store.products.length === 0 && (
+        <p className="px-1 py-6 text-xs" style={{ color: 'var(--muted)' }}>Cargando catálogo…</p>
+      )}
+
       {/* Product list */}
       <AnimatePresence mode="popLayout">
-        {store.products.length === 0 && !showForm ? (
+        {store.products.length === 0 && !showForm && !store.loading ? (
           <motion.div
             key="empty"
             initial={{ opacity: 0 }}
@@ -493,8 +527,8 @@ export default function CatalogView({ store }: { store: DashboardStore }) {
               key={product.id}
               product={product}
               onEdit={() => { setEditingId(product.id); setShowForm(false) }}
-              onDelete={() => store.deleteProduct(product.id)}
-              onStockAdjust={(variantId, delta) => store.updateStock(product.id, variantId, delta)}
+              onDelete={() => handleDelete(product.id)}
+              onStockAdjust={(variantId, delta) => handleStockAdjust(product.id, variantId, delta)}
             />
           ))
         )}

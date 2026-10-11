@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package, ShoppingCart, Wallet, Settings,
-  Menu, X, MessageCircle, LogOut,
+  Menu, X, MessageCircle, LogOut, AlertCircle,
 } from 'lucide-react'
 import type { DashboardStore } from '@/store'
 
@@ -207,6 +207,20 @@ export default function Shell({ store, children }: ShellProps) {
         </div>
 
         <div className="p-4 md:p-6">
+          {/* Failures that no call site awaited (the initial load, a stock
+              reservation after an order was already created) land here. */}
+          {store.error && (
+            <div
+              className="mb-4 flex items-start gap-2 rounded-2xl px-4 py-3 text-xs"
+              style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}
+            >
+              <AlertCircle className="mt-px size-3.5 shrink-0" />
+              <span className="flex-1">{store.error.message}</span>
+              <button onClick={store.dismissError} aria-label="Cerrar">
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
           {children(view)}
         </div>
       </main>

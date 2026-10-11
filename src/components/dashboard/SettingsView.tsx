@@ -30,17 +30,39 @@ interface SettingsViewProps {
   onTenantUpdate?: () => Promise<void>
 }
 
-export default function SettingsView({ store }: SettingsViewProps) {
+export default function SettingsView({ store, onTenantUpdate }: SettingsViewProps) {
   const [form, setForm] = useState({ ...store.config })
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const patch = (k: keyof typeof form, v: string | boolean) =>
     setForm(f => ({ ...f, [k]: v }))
 
+  // Persists to tenants, which RLS can refuse (42501) for a tenant that is not
+  // approved — so the success state is only shown after the write lands.
   const handleSave = () => {
-    store.updateConfig(form)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    setError('')
+    setSaving(true)
+    void store.updateConfig(form)
+      .then(async () => {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2500)
+        await onTenantUpdate?.()
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo guardar la configuración.'))
+      .finally(() => setSaving(false))
+  }
+
+  // config arrives from tenants asynchronously. Until it does, `form` holds
+  // defaults — saving that would overwrite the merchant's real tax_id,
+  // address and wallet, so the form is not editable yet.
+  if (store.loading) {
+    return (
+      <div className="mx-auto max-w-md py-16 text-center text-sm" style={{ color: 'var(--muted)' }}>
+        Cargando configuración…
+      </div>
+    )
   }
 
   return (
@@ -131,14 +153,21 @@ export default function SettingsView({ store }: SettingsViewProps) {
         </p>
       </Section>
 
+      {error && (
+        <div className="flex items-start gap-2 rounded-2xl px-4 py-3 text-xs" style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}>
+          <AlertCircle className="mt-px size-3.5 shrink-0" /> {error}
+        </div>
+      )}
+
       {/* Save button */}
       <button
         onClick={handleSave}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-all hover:scale-[1.01]"
+        disabled={saving}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-all hover:scale-[1.01] disabled:opacity-60"
         style={{ background: saved ? '#1a8047' : 'var(--accent)' }}
       >
         <Check className="size-4" />
-        {saved ? 'Configuración guardada' : 'Guardar configuración'}
+        {saving ? 'Guardando…' : saved ? 'Configuración guardada' : 'Guardar configuración'}
       </button>
     </div>
   )

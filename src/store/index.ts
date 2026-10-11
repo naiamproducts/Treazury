@@ -1,164 +1,63 @@
 /**
- * In-memory store — single source of truth for all dashboard state.
- * Structured to match the Supabase schema exactly so the swap to a real DB
- * is a drop-in: replace set* calls with Supabase mutations, reads with
- * Supabase selects. No external state library needed at this scale.
+ * PayStyle — dashboard store.
+ *
+ * Reads and writes Supabase. Supabase is the source of truth; the React state
+ * here is a cache of the last read plus the row each mutation just wrote, so a
+ * mutation never renders before the database accepted it.
+ *
+ * Scope notes:
+ *  - `isConnected` / `merchantAddress` are wagmi's business and stay local:
+ *    a wallet connection is not a tenant attribute. `config.merchantWallet`
+ *    IS persisted (tenants.merchant_wallet_address).
+ *  - Row ⇄ store conversion lives in ./mappers.ts. This file talks snake_case.
+ *  - Every mutation returns a Promise and rejects with a StoreError. RLS
+ *    refuses writes from a non-approved tenant with 42501; that surfaces as a
+ *    thrown StoreError the UI shows, never as a silent no-op.
  */
 
-import { useState, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { supabase } from '../lib/supabase'
+import type { Charge as ChargeRow, Order as OrderRow } from '../lib/database.types'
+import { StoreError, asStoreError, toStoreError } from './errors'
+import {
+  STORE_TO_DB_ORDER_STATUS,
+  configToTenantColumns,
+  nextOrderNumber,
+  orderLineRowToStore,
+  orderLineToColumns,
+  orderRowToStore,
+  orderToColumns,
+  pickChargeForOrder,
+  productRowToStore,
+  productToColumns,
+  readAttributes,
+  splitTotals,
+  tenantRowToConfig,
+  toQty,
+  toRowAttributes,
+  toText,
+  writeAttributes,
+} from './mappers'
+import type { BusinessConfig, DashboardStore, Order, OrderLine, Product } from './types'
 
-// ── Types ──────────────────────────────────────────────────────────────────
+export type {
+  BusinessConfig,
+  DashboardStore,
+  FieldDefinition,
+  FieldType,
+  Order,
+  OrderLine,
+  OrderStatus,
+  Product,
+  ProductVariant,
+} from './types'
+export { StoreError } from './errors'
+export type { StoreErrorCode } from './errors'
 
-export type FieldType = 'text' | 'number' | 'select' | 'boolean'
-
-export interface FieldDefinition {
-  key: string
-  label: string
-  type: FieldType
-  unit?: string           // e.g. "docena", "unidad", "caja", "kg"
-  options?: string[]      // for type=select
-  required?: boolean
-}
-
-export interface ProductVariant {
-  id: string
-  label: string           // e.g. "205/55R16", "Talla M", "Azul"
-  stock: number
-  price?: string          // override base price if needed
-}
-
-export interface Product {
-  id: string
-  name: string
-  sku?: string
-  description?: string
-  price: string           // base price in USD
-  unit: string            // e.g. "unidad", "docena", "caja"
-  stock: number           // total available (sum of variants if variants exist)
-  imageUrl?: string
-  variants: ProductVariant[]
-  customFields: Record<string, string | number | boolean>
-  fieldDefs: FieldDefinition[]   // dynamic field schema for this product
-  createdAt: string
-}
-
-export interface OrderLine {
-  productId: string
-  productName: string
-  variantId?: string
-  variantLabel?: string
-  quantity: number
-  unitPrice: string
-  unit: string
-}
-
-export type OrderStatus =
-  | 'draft'
-  | 'pending_payment'
-  | 'partially_paid'
-  | 'paid'
-  | 'cancelled'
-
-export interface Order {
-  id: string
-  orderNumber: string
-  buyerName: string
-  buyerPhone: string        // WhatsApp number — placeholder for automation
-  lines: OrderLine[]
-  subtotal: string
-  total: string             // includes IVA + IGTF if applicable
-  status: OrderStatus
-  chargeId?: string
-  paymentUrl?: string
-  vaultAddress?: string
-  txHash?: string
-  notes?: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface BusinessConfig {
-  name: string
-  rif: string              // Venezuelan tax ID (e.g. J-12345678-9)
-  address: string
-  phone: string
-  email: string
-  logoUrl?: string
-  merchantWallet: string
-  invoicePrefix: string    // e.g. "0001"
-  applyIgtf: boolean       // whether to add 3% IGTF on USDC payments
-}
-
-export interface DashboardStore {
-  // Auth
-  isConnected: boolean
-  merchantAddress: string
-
-  // Catalog
-  products: Product[]
-
-  // Orders
-  orders: Order[]
-
-  // Config
-  config: BusinessConfig
-
-  // Mutations
-  connect: (address: string) => void
-  disconnect: () => void
-  addProduct: (p: Omit<Product, 'id' | 'createdAt'>) => Product
-  updateProduct: (id: string, patch: Partial<Product>) => void
-  deleteProduct: (id: string) => void
-  updateStock: (productId: string, variantId: string | undefined, delta: number) => void
-  reserveStock: (productId: string, variantId: string | undefined, qty: number) => void
-  releaseStock: (productId: string, variantId: string | undefined, qty: number) => void
-  addOrder: (o: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>) => Order
-  updateOrder: (id: string, patch: Partial<Order>) => void
-  updateConfig: (patch: Partial<BusinessConfig>) => void
-}
-
-// ── Seed data (demo) ───────────────────────────────────────────────────────
-
-const SEED_PRODUCTS: Product[] = [
-  {
-    id: 'prod-1',
-    name: 'Neumático 205/55R16',
-    sku: 'NEU-205-55R16',
-    description: 'Neumático radial para vehículo de pasajeros.',
-    price: '45.00',
-    unit: 'unidad',
-    stock: 48,
-    variants: [
-      { id: 'v1', label: '205/55R16', stock: 24, price: '45.00' },
-      { id: 'v2', label: '215/60R16', stock: 12, price: '48.00' },
-      { id: 'v3', label: '225/65R17', stock: 12, price: '55.00' },
-    ],
-    customFields: { marca: 'Bridgestone', indice_carga: '91', indice_velocidad: 'V' },
-    fieldDefs: [
-      { key: 'marca', label: 'Marca', type: 'text', required: true },
-      { key: 'indice_carga', label: 'Índice de carga', type: 'text' },
-      { key: 'indice_velocidad', label: 'Índice de velocidad', type: 'text' },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'prod-2',
-    name: 'Aceite de motor 5W-30',
-    sku: 'ACE-5W30-1L',
-    description: 'Aceite sintético para motor gasolina/diesel.',
-    price: '8.50',
-    unit: 'litro',
-    stock: 120,
-    variants: [],
-    customFields: { marca: 'Mobil', viscosidad: '5W-30', presentacion: '1L' },
-    fieldDefs: [
-      { key: 'marca', label: 'Marca', type: 'text', required: true },
-      { key: 'viscosidad', label: 'Viscosidad', type: 'text' },
-      { key: 'presentacion', label: 'Presentación', type: 'text' },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-]
+/** Order numbers are allocated by max+1 and can collide; retry on 23505. */
+const ORDER_NUMBER_ATTEMPTS = 3
+/** Compare-and-swap retries for a concurrent stock adjustment. */
+const STOCK_CAS_ATTEMPTS = 3
 
 const DEFAULT_CONFIG: BusinessConfig = {
   name: 'Mi Negocio',
@@ -171,29 +70,362 @@ const DEFAULT_CONFIG: BusinessConfig = {
   applyIgtf: true,
 }
 
+// ── Reads ──────────────────────────────────────────────────────────────────
+
+async function fetchConfig(tenantId: string): Promise<BusinessConfig> {
+  const { data, error } = await supabase
+    .from('tenants')
+    .select('*')
+    .eq('id', tenantId)
+    .single()
+  if (error) throw toStoreError(error, 'tenants')
+  return tenantRowToConfig(data)
+}
+
+async function fetchProducts(tenantId: string): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+  if (error) throw toStoreError(error, 'products')
+  return data.map(productRowToStore)
+}
+
+async function fetchLines(orderId: string): Promise<OrderLine[]> {
+  const { data, error } = await supabase
+    .from('order_lines')
+    .select('*')
+    .eq('order_id', orderId)
+  if (error) throw toStoreError(error, 'order_lines')
+  return data.map(orderLineRowToStore)
+}
+
+async function fetchOrders(tenantId: string): Promise<Order[]> {
+  const { data: orderRows, error: orderError } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false })
+  if (orderError) throw toStoreError(orderError, 'orders')
+
+  const ids = orderRows.map(row => row.id)
+  if (ids.length === 0) return []
+
+  // Two flat reads instead of one embedded select: order_lines has no
+  // tenant_id and is reached through its parent order, and orders→charges is
+  // a plain nullable FK. Embedding both would mean a wide payload whose
+  // generated types this project does not declare relationships for.
+  const [linesResult, chargesResult] = await Promise.all([
+    supabase.from('order_lines').select('*').in('order_id', ids),
+    supabase.from('charges').select('*').in('order_id', ids),
+  ])
+  if (linesResult.error) throw toStoreError(linesResult.error, 'order_lines')
+  if (chargesResult.error) throw toStoreError(chargesResult.error, 'charges')
+
+  const linesByOrder = new Map<string, OrderLine[]>()
+  for (const row of linesResult.data) {
+    const bucket = linesByOrder.get(row.order_id)
+    if (bucket) bucket.push(orderLineRowToStore(row))
+    else linesByOrder.set(row.order_id, [orderLineRowToStore(row)])
+  }
+
+  const chargesByOrder = new Map<string, ChargeRow[]>()
+  for (const row of chargesResult.data) {
+    if (!row.order_id) continue
+    const bucket = chargesByOrder.get(row.order_id)
+    if (bucket) bucket.push(row)
+    else chargesByOrder.set(row.order_id, [row])
+  }
+
+  return orderRows.map(row =>
+    orderRowToStore(
+      row,
+      linesByOrder.get(row.id) ?? [],
+      pickChargeForOrder(chargesByOrder.get(row.id) ?? []),
+    ),
+  )
+}
+
+// ── Stock ──────────────────────────────────────────────────────────────────
+
+/**
+ * Adjust products.stock with a compare-and-swap: the WHERE clause re-asserts
+ * the value we just read, so if another writer moved stock in between this
+ * update matches zero rows instead of clobbering their number. Zero rows means
+ * "lost the race" — re-read and try again, then give up loudly.
+ */
+async function adjustStockColumn(productId: string, delta: number): Promise<Product> {
+  for (let attempt = 0; attempt < STOCK_CAS_ATTEMPTS; attempt++) {
+    const { data: current, error: readError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single()
+    if (readError) throw toStoreError(readError, 'products')
+
+    // NULL is "no stock control", not zero. Writing a number here would switch
+    // stock control on behind the merchant's back, so refuse instead.
+    if (current.stock === null) {
+      throw new StoreError('unsupported', 'Este producto no tiene control de stock habilitado.')
+    }
+
+    const next = current.stock + delta
+    if (next < 0) {
+      throw new StoreError('insufficient_stock', `Stock disponible: ${current.stock}, se intentan descontar ${Math.abs(delta)}.`)
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from('products')
+      .update({ stock: next })
+      .eq('id', productId)
+      .eq('stock', current.stock)
+      .select('*')
+    if (updateError) throw toStoreError(updateError, 'products')
+
+    const row = updated[0]
+    if (row) return productRowToStore(row)
+  }
+  throw new StoreError('insufficient_stock', `El stock cambió ${STOCK_CAS_ATTEMPTS} veces seguidas; reintenta.`)
+}
+
+/**
+ * Adjust one variant's stock. Variants live inside products.attributes, a
+ * single jsonb column: this is a plain read-modify-write with no compare-and-
+ * swap (PostgREST cannot compare a jsonb column in a filter), so two tabs
+ * editing the same product's variants can lose one another's change. Closing
+ * that hole needs an RPC and there is none.
+ */
+async function adjustVariantStock(productId: string, variantId: string, delta: number): Promise<Product> {
+  const { data: current, error: readError } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', productId)
+    .single()
+  if (readError) throw toStoreError(readError, 'products')
+
+  const attributes = readAttributes(current.attributes)
+  if (!attributes.variants.some(variant => variant.id === variantId)) {
+    throw new StoreError('not_found', 'La variante ya no existe en este producto.')
+  }
+  const variants = attributes.variants.map(variant =>
+    variant.id === variantId ? { ...variant, stock: Math.max(0, variant.stock + delta) } : variant,
+  )
+  // Keep products.stock as the sum of the variants, the same invariant the
+  // in-memory store maintained.
+  const stock = variants.reduce((sum, variant) => sum + toQty(variant.stock), 0)
+
+  const { data: updated, error: updateError } = await supabase
+    .from('products')
+    .update({
+      attributes: toRowAttributes(writeAttributes({
+        variants,
+        customFields: attributes.values,
+        fieldDefs: attributes.fieldDefs,
+      })),
+      stock,
+    })
+    .eq('id', productId)
+    .select('*')
+    .single()
+  if (updateError) throw toStoreError(updateError, 'products')
+  return productRowToStore(updated)
+}
+
+/**
+ * Order lines carry a variant *label*, not an id (order_lines has no
+ * variant_id), so a reservation has to look the id back up. Labels are not
+ * unique in the schema, so an ambiguous label resolves to the first match and
+ * stock is deducted from that one.
+ */
+async function resolveVariantId(productId: string, variantLabel: string | undefined): Promise<string | undefined> {
+  if (!variantLabel) return undefined
+  const { data, error } = await supabase
+    .from('products')
+    .select('attributes')
+    .eq('id', productId)
+    .single()
+  if (error) throw toStoreError(error, 'products')
+  const attributes = readAttributes(data.attributes)
+  return attributes.variants.find(variant => variant.label === variantLabel)?.id
+}
+
+// ── Charges ────────────────────────────────────────────────────────────────
+
+/**
+ * Create or update the order's active charge.
+ *
+ * charges_active_order_uidx allows at most one pending/partial charge per
+ * order, so this updates the existing active charge when there is one and
+ * only inserts otherwise. payment_url is NOT NULL, which is why a patch with
+ * no URL cannot create a charge.
+ */
+async function writeChargeForOrder(
+  orderId: string,
+  tenantId: string,
+  amount: string,
+  patch: Partial<Pick<Order, 'paymentUrl' | 'vaultAddress' | 'txHash'>>,
+): Promise<ChargeRow | undefined> {
+  const columns: Partial<ChargeRow> = {}
+  if (patch.paymentUrl !== undefined) columns.payment_url = patch.paymentUrl
+  if (patch.vaultAddress !== undefined) columns.vault_address = patch.vaultAddress
+  if (patch.txHash !== undefined) columns.tx_hash = patch.txHash
+
+  const { data: active, error: activeError } = await supabase
+    .from('charges')
+    .select('*')
+    .eq('order_id', orderId)
+    .in('status', ['pending', 'partial'])
+    .limit(1)
+  if (activeError) throw toStoreError(activeError, 'charges')
+
+  const existing = active[0]
+  if (existing) {
+    const { data, error } = await supabase
+      .from('charges')
+      .update(columns)
+      .eq('id', existing.id)
+      .select('*')
+      .single()
+    if (error) throw toStoreError(error, 'charges')
+    return data
+  }
+
+  if (patch.paymentUrl === undefined) {
+    throw new StoreError('not_found', 'No hay un cobro activo para esta orden y falta el link de pago para crearlo.')
+  }
+  if (toQty(amount) <= 0) {
+    throw new StoreError('conflict', 'El total de la orden debe ser mayor que cero para generar un cobro.')
+  }
+
+  const { data, error } = await supabase
+    .from('charges')
+    .insert({
+      tenant_id: tenantId,
+      order_id: orderId,
+      amount: toText(toQty(amount)),
+      payment_url: patch.paymentUrl,
+      status: 'pending',
+      currency: 'USD',
+      ...(patch.vaultAddress ? { vault_address: patch.vaultAddress } : {}),
+      ...(patch.txHash ? { tx_hash: patch.txHash } : {}),
+    })
+    .select('*')
+    .single()
+
+  if (!error) return data
+
+  if (error.code === '23505') {
+    // Another tab created the active charge between the select and the insert.
+    // Adopt it and update instead.
+    const { data: raced, error: readError } = await supabase
+      .from('charges')
+      .select('*')
+      .eq('order_id', orderId)
+      .in('status', ['pending', 'partial'])
+      .limit(1)
+    if (readError) throw toStoreError(readError, 'charges')
+    const winner = raced[0]
+    if (!winner) throw toStoreError(error, 'charges')
+    const { data: updated, error: updateError } = await supabase
+      .from('charges')
+      .update(columns)
+      .eq('id', winner.id)
+      .select('*')
+      .single()
+    if (updateError) throw toStoreError(updateError, 'charges')
+    return updated
+  }
+
+  throw toStoreError(error, 'charges')
+}
+
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-let orderCounter = 1
-
-function newId() {
-  return Math.random().toString(36).slice(2, 10)
-}
-
-function nextOrderNumber() {
-  return `ORD-${String(orderCounter++).padStart(4, '0')}`
-}
-
-export function useDashboardStore(): DashboardStore {
+/**
+ * @param tenantId Tenant whose data the store reads. Omitted while signed out
+ *   or on the pending-approval screen: the hook then stays empty and idle
+ *   instead of querying rows RLS would reject anyway.
+ */
+export function useDashboardStore(tenantId?: string): DashboardStore {
   const [isConnected, setIsConnected] = useState(false)
   const [merchantAddress, setMerchantAddress] = useState('')
-  const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS)
+  const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [config, setConfig] = useState<BusinessConfig>(DEFAULT_CONFIG)
+  const [error, setError] = useState<StoreError | null>(null)
+  /** Tenant the data currently in state belongs to. */
+  const [loadedTenant, setLoadedTenant] = useState<string | null>(null)
+
+  // Derived, never set from the effect: true exactly while what is on screen
+  // is not this tenant's data yet. Setting it inside the effect would cascade
+  // a render; deriving it cannot.
+  const loading = tenantId !== undefined && loadedTenant !== tenantId
+
+  // Incremented per load so a response that arrives after the tenant changed
+  // (or after unmount) cannot write stale rows into state.
+  const loadSeq = useRef(0)
+
+  const requireTenant = useCallback((): string => {
+    if (!tenantId) {
+      throw new StoreError('unsupported', 'No hay sesión de tenant activa.')
+    }
+    return tenantId
+  }, [tenantId])
+
+  // Written as an explicit promise chain rather than an async function: the
+  // state writes then provably happen in a settled callback, never in the
+  // effect's synchronous body (which oxlint's react/set-state-in-effect
+  // rejects, correctly — a cascading render buys nothing here).
+  const load = useCallback((): Promise<void> => {
+    const currentTenant = requireTenant()
+    loadSeq.current += 1
+    const seq = loadSeq.current
+    const isCurrent = () => loadSeq.current === seq
+
+    return Promise.all([
+      fetchConfig(currentTenant),
+      fetchProducts(currentTenant),
+      fetchOrders(currentTenant),
+    ])
+      .then(([nextConfig, nextProducts, nextOrders]) => {
+        if (!isCurrent()) return
+        setConfig(nextConfig)
+        setProducts(nextProducts)
+        setOrders(nextOrders)
+        setError(null)
+      })
+      .catch((thrown: unknown) => {
+        if (!isCurrent()) return
+        setError(asStoreError(thrown))
+      })
+      .finally(() => {
+        // Marked loaded on failure too, otherwise a failed read would leave the
+        // skeleton spinning forever with no error visible under it.
+        if (isCurrent()) setLoadedTenant(currentTenant)
+      })
+  }, [requireTenant])
+
+  useEffect(() => {
+    if (!tenantId) return
+    void load()
+  }, [tenantId, load])
+
+  const refresh = useCallback(async (): Promise<void> => {
+    await load()
+  }, [load])
+
+  const dismissError = useCallback(() => setError(null), [])
+
+  // ── Wallet (local only) ────────────────────────────────────────────────
 
   const connect = useCallback((address: string) => {
     setIsConnected(true)
     setMerchantAddress(address)
-    setConfig((c) => ({ ...c, merchantWallet: address }))
+    // config.merchantWallet is deliberately NOT touched here: it is the
+    // tenants.merchant_wallet_address column and is loaded/saved through
+    // updateConfig. A wallet connect must not silently rewrite the tenant.
   }, [])
 
   const disconnect = useCallback(() => {
@@ -201,76 +433,298 @@ export function useDashboardStore(): DashboardStore {
     setMerchantAddress('')
   }, [])
 
-  const addProduct = useCallback((p: Omit<Product, 'id' | 'createdAt'>): Product => {
-    const product: Product = { ...p, id: `prod-${newId()}`, createdAt: new Date().toISOString() }
-    setProducts((prev) => [product, ...prev])
-    return product
-  }, [])
+  // ── Catalog ────────────────────────────────────────────────────────────
 
-  const updateProduct = useCallback((id: string, patch: Partial<Product>) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
-  }, [])
+  const addProduct = useCallback(async (input: Omit<Product, 'id' | 'createdAt'>): Promise<Product> => {
+    const currentTenant = requireTenant()
+    const { data, error } = await supabase
+      .from('products')
+      .insert({
+        tenant_id: currentTenant,
+        name: input.name,
+        description: input.description ?? null,
+        sku: input.sku ?? null,
+        image_url: input.imageUrl ?? null,
+        unit: input.unit,
+        price: input.price,
+        stock: input.stock,
+        currency: 'USD',
+        attributes: toRowAttributes(writeAttributes(input)),
+        // tax_rate is left to the column default (0.16).
+      })
+      .select('*')
+      .single()
+    if (error) throw toStoreError(error, 'products')
 
-  const deleteProduct = useCallback((id: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id))
-  }, [])
+    const created = productRowToStore(data)
+    setProducts(prev => [created, ...prev])
+    return created
+  }, [requireTenant])
 
-  const updateStock = useCallback((productId: string, variantId: string | undefined, delta: number) => {
-    setProducts((prev) => prev.map((p) => {
-      if (p.id !== productId) return p
-      if (variantId) {
-        const variants = p.variants.map((v) =>
-          v.id === variantId ? { ...v, stock: Math.max(0, v.stock + delta) } : v
-        )
-        const stock = variants.reduce((s, v) => s + v.stock, 0)
-        return { ...p, variants, stock }
-      }
-      return { ...p, stock: Math.max(0, p.stock + delta) }
-    }))
-  }, [])
+  const updateProduct = useCallback(async (id: string, patch: Partial<Product>): Promise<Product> => {
+    const columns = productToColumns(patch)
 
-  const reserveStock = useCallback((productId: string, variantId: string | undefined, qty: number) => {
-    updateStock(productId, variantId, -qty)
-  }, [updateStock])
-
-  const releaseStock = useCallback((productId: string, variantId: string | undefined, qty: number) => {
-    updateStock(productId, variantId, qty)
-  }, [updateStock])
-
-  const addOrder = useCallback((o: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>): Order => {
-    const now = new Date().toISOString()
-    const order: Order = {
-      ...o,
-      id: `ord-${newId()}`,
-      orderNumber: nextOrderNumber(),
-      createdAt: now,
-      updatedAt: now,
+    const touchesAttributes =
+      patch.variants !== undefined || patch.customFields !== undefined || patch.fieldDefs !== undefined
+    if (touchesAttributes) {
+      // Merge into what is stored rather than replacing: a patch that carries
+      // only `variants` must not wipe the product's custom fields.
+      const { data: current, error } = await supabase
+        .from('products')
+        .select('attributes')
+        .eq('id', id)
+        .single()
+      if (error) throw toStoreError(error, 'products')
+      const attributes = readAttributes(current.attributes)
+      columns.attributes = toRowAttributes(writeAttributes({
+        variants: patch.variants ?? attributes.variants,
+        customFields: patch.customFields ?? attributes.values,
+        fieldDefs: patch.fieldDefs ?? attributes.fieldDefs,
+      }))
     }
-    setOrders((prev) => [order, ...prev])
-    // Reserve stock for each line
-    order.lines.forEach((line) => {
-      reserveStock(line.productId, line.variantId, line.quantity)
-    })
-    return order
-  }, [reserveStock])
 
-  const updateOrder = useCallback((id: string, patch: Partial<Order>) => {
-    setOrders((prev) => prev.map((o) =>
-      o.id === id ? { ...o, ...patch, updatedAt: new Date().toISOString() } : o
-    ))
+    const { data, error } = await supabase
+      .from('products')
+      .update(columns)
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error) throw toStoreError(error, 'products')
+
+    const updated = productRowToStore(data)
+    setProducts(prev => prev.map(product => (product.id === id ? updated : product)))
+    return updated
   }, [])
 
-  const updateConfig = useCallback((patch: Partial<BusinessConfig>) => {
-    setConfig((c) => ({ ...c, ...patch }))
+  const deleteProduct = useCallback(async (id: string): Promise<void> => {
+    const { data, error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id)
+      .select('id')
+    if (error) throw toStoreError(error, 'products')
+    if (data.length === 0) throw new StoreError('not_found', 'El producto ya no existe.')
+
+    // Past order_lines keep their description snapshot: order_lines.product_id
+    // is ON DELETE SET NULL, so deleting a product never rewrites history.
+    setProducts(prev => prev.filter(product => product.id !== id))
   }, [])
+
+  const updateStock = useCallback(async (
+    productId: string,
+    variantId: string | undefined,
+    delta: number,
+  ): Promise<void> => {
+    const updated = variantId
+      ? await adjustVariantStock(productId, variantId, delta)
+      : await adjustStockColumn(productId, delta)
+    setProducts(prev => prev.map(product => (product.id === updated.id ? updated : product)))
+  }, [])
+
+  const reserveStock = useCallback(async (
+    productId: string,
+    variantId: string | undefined,
+    qty: number,
+  ): Promise<void> => {
+    await updateStock(productId, variantId, -qty)
+  }, [updateStock])
+
+  const releaseStock = useCallback(async (
+    productId: string,
+    variantId: string | undefined,
+    qty: number,
+  ): Promise<void> => {
+    await updateStock(productId, variantId, qty)
+  }, [updateStock])
+
+  // ── Orders ─────────────────────────────────────────────────────────────
+
+  const addOrder = useCallback(async (
+    input: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>,
+  ): Promise<Order> => {
+    const currentTenant = requireTenant()
+
+    const split = splitTotals(input.subtotal, input.total, config.applyIgtf)
+
+    // order_number is UNIQUE per tenant and there is no counter column or RPC
+    // for orders. Read the tenant's current maximum and retry on collision.
+    // next_invoice_number() is deliberately not reused: it advances the fiscal
+    // invoice sequence, and an order must not consume invoice numbers.
+    let inserted: OrderRow | null = null
+    let lastConflict = ''
+    for (let attempt = 0; attempt < ORDER_NUMBER_ATTEMPTS && inserted === null; attempt++) {
+      const { data: taken, error: numbersError } = await supabase
+        .from('orders')
+        .select('order_number')
+        .eq('tenant_id', currentTenant)
+      if (numbersError) throw toStoreError(numbersError, 'orders')
+
+      const { data, error } = await supabase
+        .from('orders')
+        .insert({
+          tenant_id: currentTenant,
+          order_number: nextOrderNumber(taken.map(row => row.order_number)),
+          status: STORE_TO_DB_ORDER_STATUS[input.status ?? 'draft'],
+          subtotal: input.subtotal,
+          tax_amount: input.taxAmount ?? split.taxAmount,
+          igtf_amount: input.igtfAmount ?? split.igtfAmount,
+          total: input.total,
+          currency: input.currency ?? 'USD',
+          buyer_name: input.buyerName,
+          buyer_phone: input.buyerPhone || null,
+          notes: input.notes ?? null,
+          source: 'dashboard',
+        })
+        .select('*')
+        .single()
+
+      if (!error) inserted = data
+      else if (error.code === '23505') lastConflict = error.message
+      else throw toStoreError(error, 'orders')
+    }
+    if (inserted === null) {
+      throw new StoreError('unique_violation', `No se pudo asignar un número de orden único en ${ORDER_NUMBER_ATTEMPTS} intentos. ${lastConflict}`)
+    }
+    const orderRow = inserted
+
+    // Second write: the lines. PostgREST executes one statement per request,
+    // so there is NO transaction spanning these two inserts without an RPC
+    // (this project has none for orders). If the lines fail, the order row is
+    // deleted to avoid an orphan — a compensation, not a rollback: if that
+    // delete fails too, the order stays behind and the error says so.
+    const lineColumns = input.lines.map(line => orderLineToColumns(orderRow.id, line))
+    if (lineColumns.length > 0) {
+      const { error: linesError } = await supabase.from('order_lines').insert(lineColumns)
+      if (linesError) {
+        const { error: cleanupError } = await supabase
+          .from('orders')
+          .delete()
+          .eq('id', orderRow.id)
+        if (cleanupError) {
+          throw new StoreError('unknown',
+            `Fallaron las líneas (${linesError.message}) y la orden ${orderRow.order_number} no se pudo eliminar (${cleanupError.message}). Elimínala a mano.`)
+        }
+        throw toStoreError(linesError, 'order_lines')
+      }
+    }
+
+    // The order is durable from here on, so a stock failure is reported
+    // through the store's error state instead of rejecting addOrder: the
+    // order exists and the caller needs its id either way.
+    const failures: string[] = []
+    for (const line of input.lines) {
+      if (!line.productId) continue
+      try {
+        const variantId = await resolveVariantId(line.productId, line.variantLabel)
+        await updateStock(line.productId, variantId, -line.quantity)
+      } catch (thrown) {
+        failures.push(`${line.productName}: ${asStoreError(thrown).message}`)
+      }
+    }
+    if (failures.length > 0) {
+      setError(new StoreError('conflict',
+        `La orden ${orderRow.order_number} se creó pero no se descontó el stock de: ${failures.join('; ')}`))
+    }
+
+    const created = orderRowToStore(orderRow, input.lines, undefined)
+    setOrders(prev => [created, ...prev])
+    return created
+  }, [requireTenant, config.applyIgtf, updateStock])
+
+  const updateOrder = useCallback(async (id: string, patch: Partial<Order>): Promise<Order> => {
+    const currentTenant = requireTenant()
+
+    if (patch.lines !== undefined) {
+      // Rewriting lines means delete-then-reinsert order_lines: a second
+      // unguarded compensation step for a feature the UI does not have. Refuse
+      // loudly rather than dropping part of the patch silently.
+      throw new StoreError('unsupported', 'Editar las líneas de una orden todavía no está soportado.')
+    }
+
+    const columns = orderToColumns(patch, config.applyIgtf)
+    const writesCharge =
+      patch.paymentUrl !== undefined || patch.vaultAddress !== undefined || patch.txHash !== undefined
+
+    let orderRow: OrderRow | null = null
+    if (Object.keys(columns).length > 0) {
+      const { data, error } = await supabase
+        .from('orders')
+        .update(columns)
+        .eq('id', id)
+        .select('*')
+        .single()
+      if (error) throw toStoreError(error, 'orders')
+      orderRow = data
+    }
+
+    let charge: ChargeRow | undefined
+    if (writesCharge) {
+      // chargeId is read-only in this model: it identifies the charge row the
+      // store already denormalizes, so it is never written back.
+      if (orderRow === null) {
+        const { data, error } = await supabase.from('orders').select('*').eq('id', id).single()
+        if (error) throw toStoreError(error, 'orders')
+        orderRow = data
+      }
+      charge = await writeChargeForOrder(id, currentTenant, orderRow.total, patch)
+    } else if (orderRow === null) {
+      const { data, error } = await supabase.from('orders').select('*').eq('id', id).single()
+      if (error) throw toStoreError(error, 'orders')
+      orderRow = data
+    }
+
+    // Re-read the charge when this patch did not touch it: paymentUrl/txHash
+    // are denormalized from charges, so mapping the order alone would blank
+    // them out (cancelling an order must not erase its payment link).
+    if (charge === undefined) {
+      const { data: charges, error } = await supabase
+        .from('charges')
+        .select('*')
+        .eq('order_id', id)
+      if (error) throw toStoreError(error, 'charges')
+      charge = pickChargeForOrder(charges)
+    }
+
+    const lines = await fetchLines(id)
+    const updated = orderRowToStore(orderRow, lines, charge)
+    setOrders(prev => prev.map(order => (order.id === id ? updated : order)))
+    return updated
+  }, [requireTenant, config.applyIgtf])
+
+  // ── Config ─────────────────────────────────────────────────────────────
+
+  const updateConfig = useCallback(async (patch: Partial<BusinessConfig>): Promise<void> => {
+    const currentTenant = requireTenant()
+    const { data, error } = await supabase
+      .from('tenants')
+      .update(configToTenantColumns(patch))
+      .eq('id', currentTenant)
+      .select('*')
+      .single()
+    if (error) throw toStoreError(error, 'tenants')
+    setConfig(tenantRowToConfig(data))
+  }, [requireTenant])
 
   return {
-    isConnected, merchantAddress,
-    products, orders, config,
-    connect, disconnect,
-    addProduct, updateProduct, deleteProduct,
-    updateStock, reserveStock, releaseStock,
-    addOrder, updateOrder,
+    isConnected,
+    merchantAddress,
+    products,
+    orders,
+    config,
+    loading,
+    error,
+    connect,
+    disconnect,
+    refresh,
+    dismissError,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    updateStock,
+    reserveStock,
+    releaseStock,
+    addOrder,
+    updateOrder,
     updateConfig,
   }
 }

@@ -34,6 +34,14 @@ export type Tenant = {
   fiscal_config: Record<string, unknown>
 }
 
+export type TenantMember = {
+  id: string
+  tenant_id: string
+  user_id: string
+  role: MemberRole
+  created_at: string
+}
+
 export type Contact = {
   id: string
   tenant_id: string
@@ -177,6 +185,7 @@ export type Database = {
   public: {
     Tables: {
       tenants: { Row: Tenant; Insert: Partial<Tenant>; Update: Partial<Tenant>; Relationships: [] }
+      tenant_members: { Row: TenantMember; Insert: Partial<TenantMember>; Update: Partial<TenantMember>; Relationships: [] }
       contacts: { Row: Contact; Insert: Partial<Contact>; Update: Partial<Contact>; Relationships: [] }
       products: { Row: Product; Insert: Partial<Product>; Update: Partial<Product>; Relationships: [] }
       orders: { Row: Order; Insert: Partial<Order>; Update: Partial<Order>; Relationships: [] }
@@ -186,7 +195,14 @@ export type Database = {
       invoices: { Row: Invoice; Insert: Partial<Invoice>; Update: Partial<Invoice>; Relationships: [] }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      // Reserves and returns the next invoice number for the caller's tenant.
+      // Atomic: a single UPDATE ... RETURNING, so concurrent callers cannot
+      // receive the same number. Derives the tenant from auth.uid(), so it
+      // takes no tenant argument on purpose. Raises 42501 if the tenant is
+      // missing or not approved. See docs/migrations/002_atomic_invoice_number.sql.
+      next_invoice_number: { Args: Record<string, never>; Returns: number }
+    }
     Enums: {
       order_status: OrderStatus
       invoice_status: InvoiceStatus

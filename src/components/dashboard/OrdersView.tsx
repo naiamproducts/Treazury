@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, ShoppingCart, X, MessageCircle, ExternalLink,
-  Copy, CheckCheck, ChevronDown, ChevronUp, AlertCircle,
+  Copy, CheckCheck, ChevronDown, ChevronUp, AlertCircle, Loader2,
 } from 'lucide-react'
 import { TokenUSDC } from '@web3icons/react'
 import type { DashboardStore, Order, OrderLine } from '@/store'
@@ -51,7 +51,7 @@ function CopyBtn({ text }: { text: string }) {
 
 interface NewOrderFormProps {
   store: DashboardStore
-  onCreated: (order: Order) => void
+  onCreated: (order: Order) => Promise<void>
   onCancel: () => void
 }
 
@@ -104,19 +104,33 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
   const removeLine = (idx: number) => setLines(ls => ls.filter((_, i) => i !== idx))
   const patchQty = (idx: number, qty: number) => setLines(ls => ls.map((l, i) => i === idx ? { ...l, quantity: Math.max(1, qty) } : l))
 
-  const handleCreate = () => {
+  const [saving, setSaving] = useState(false)
+
+  // Every store mutation is a network round trip now, so this is async: the
+  // order row, its lines and the stock reservations are separate writes.
+  const handleCreate = async () => {
     if (!buyerName.trim()) { setError('El nombre del comprador es requerido.'); return }
     if (lines.length === 0) { setError('Agrega al menos un producto.'); return }
-    const order = store.addOrder({
-      buyerName: buyerName.trim(),
-      buyerPhone: buyerPhone.trim(),
-      lines,
-      subtotal: subtotal.toFixed(2),
-      total: total.toFixed(2),
-      status: 'draft',
-      notes: notes.trim() || undefined,
-    })
-    onCreated(order)
+    setSaving(true)
+    try {
+      const order = await store.addOrder({
+        buyerName: buyerName.trim(),
+        buyerPhone: buyerPhone.trim(),
+        lines,
+        subtotal: subtotal.toFixed(2),
+        taxAmount: iva.toFixed(2),
+        igtfAmount: igtf.toFixed(2),
+        total: total.toFixed(2),
+        currency: 'USD',
+        status: 'draft',
+        notes: notes.trim() || undefined,
+      })
+      await onCreated(order)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo crear la orden.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const inputStyle = { background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }
@@ -246,8 +260,8 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
 
         <div className="flex gap-2">
           <button onClick={onCancel} className="flex-1 rounded-2xl py-3 text-sm font-semibold transition-all hover:opacity-80" style={{ background: 'var(--surface-muted)', color: 'var(--ink-2)', border: '1px solid var(--border)' }}>Cancelar</button>
-          <button onClick={handleCreate} className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-white" style={{ background: 'var(--accent)' }}>
-            <ShoppingCart className="size-4" /> Crear orden
+          <button onClick={() => { void handleCreate() }} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: 'var(--accent)' }}>
+            <ShoppingCart className="size-4" /> {saving ? 'Guardando…' : 'Crear orden'}
           </button>
         </div>
       </div>
@@ -259,11 +273,22 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
 
 function OrderCard({ order, store }: { order: Order; store: DashboardStore }) {
   const [expanded, setExpanded] = useState(false)
+  const [actionError, setActionError] = useState('')
   const st = statusLabel(order.status)
   const payUrl = `${window.location.origin}?to=${store.merchantAddress}&amount=${order.total}&chargeId=${order.id}&memo=${encodeURIComponent(order.orderNumber)}`
 
+  // Writing the link also creates the charge row (charges.payment_url is where
+  // the URL lives), so it is a round trip that can fail under RLS.
   const handleGenerateLink = () => {
-    store.updateOrder(order.id, { status: 'pending_payment', paymentUrl: payUrl })
+    setActionError('')
+    void store.updateOrder(order.id, { status: 'pending_payment', paymentUrl: payUrl })
+      .catch((err: unknown) => setActionError(err instanceof Error ? err.message : 'No se pudo generar el link de pago.'))
+  }
+
+  const handleCancel = () => {
+    setActionError('')
+    void store.updateOrder(order.id, { status: 'cancelled' })
+      .catch((err: unknown) => setActionError(err instanceof Error ? err.message : 'No se pudo cancelar la orden.'))
   }
 
   const waText = encodeURIComponent(
@@ -333,7 +358,7 @@ function OrderCard({ order, store }: { order: Order; store: DashboardStore }) {
 
         {order.status !== 'cancelled' && order.status !== 'paid' && (
           <button
-            onClick={() => store.updateOrder(order.id, { status: 'cancelled' })}
+            onClick={handleCancel}
             className="ml-auto flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium"
             style={{ color: 'var(--danger)' }}
           >
@@ -341,6 +366,12 @@ function OrderCard({ order, store }: { order: Order; store: DashboardStore }) {
           </button>
         )}
       </div>
+
+      {actionError && (
+        <div className="flex items-start gap-2 border-t px-4 py-2 text-xs" style={{ borderColor: 'var(--border)', color: 'var(--danger)' }}>
+          <AlertCircle className="mt-px size-3.5 shrink-0" /> {actionError}
+        </div>
+      )}
 
       {/* Expanded detail */}
       <AnimatePresence>
@@ -378,12 +409,20 @@ function OrderCard({ order, store }: { order: Order; store: DashboardStore }) {
 
 export default function OrdersView({ store }: { store: DashboardStore }) {
   const [showForm, setShowForm] = useState(false)
+  const [linkError, setLinkError] = useState('')
 
-  const handleCreated = (order: Order) => {
+  // The order is already persisted by the time this runs, so a failure here
+  // must not look like a failed creation: the order stays, the error says
+  // only that the payment link was not generated.
+  const handleCreated = async (order: Order) => {
     setShowForm(false)
-    // Auto-generate payment link on creation for convenience
     const payUrl = `${window.location.origin}?to=${store.merchantAddress}&amount=${order.total}&chargeId=${order.id}&memo=${encodeURIComponent(order.orderNumber)}`
-    store.updateOrder(order.id, { status: 'pending_payment', paymentUrl: payUrl })
+    try {
+      await store.updateOrder(order.id, { status: 'pending_payment', paymentUrl: payUrl })
+      setLinkError('')
+    } catch (err) {
+      setLinkError(`Orden ${order.orderNumber} creada, pero no se pudo generar el link de pago: ${err instanceof Error ? err.message : 'error desconocido'}`)
+    }
   }
 
   const pending = store.orders.filter(o => o.status === 'pending_payment' || o.status === 'partially_paid')
@@ -404,6 +443,20 @@ export default function OrdersView({ store }: { store: DashboardStore }) {
         </button>
       </div>
 
+      {linkError && (
+        <div className="flex items-start gap-2 rounded-2xl px-4 py-3 text-xs" style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}>
+          <AlertCircle className="mt-px size-3.5 shrink-0" />
+          <span className="flex-1">{linkError}</span>
+          <button onClick={() => setLinkError('')}><X className="size-3.5" /></button>
+        </div>
+      )}
+
+      {store.loading && store.orders.length === 0 && (
+        <div className="flex items-center gap-2 px-1 py-6 text-xs" style={{ color: 'var(--muted)' }}>
+          <Loader2 className="size-3.5 animate-spin" /> Cargando órdenes…
+        </div>
+      )}
+
       <AnimatePresence>
         {showForm && (
           <motion.div key="form" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
@@ -412,7 +465,7 @@ export default function OrdersView({ store }: { store: DashboardStore }) {
         )}
       </AnimatePresence>
 
-      {store.orders.length === 0 && !showForm && (
+      {store.orders.length === 0 && !showForm && !store.loading && (
         <div className="flex flex-col items-center gap-3 rounded-3xl py-16 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <ShoppingCart className="size-10" style={{ color: 'var(--subtle)' }} />
           <p className="text-sm font-medium" style={{ color: 'var(--ink-2)' }}>Sin órdenes todavía</p>
