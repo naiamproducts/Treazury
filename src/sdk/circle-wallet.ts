@@ -1,128 +1,83 @@
 /**
- * PayStyle SDK — Circle Developer-Controlled Wallet helpers
+ * PayStyle SDK — Circle Developer-Controlled Wallet helpers (LEGACY path).
  *
- * Wraps Circle's developer-controlled wallets SDK.
- * In a production SDK this module runs server-side only.
- * For this PoC it runs in the browser using VITE_ env vars so the
- * demo works without a backend.
+ * New tenants must NEVER touch this module or the `circle-wallet` Edge
+ * Function behind it: tenant creation and onboarding resolve the payout
+ * address exclusively through Privy embedded wallets (or a
+ * merchant-supplied BYOW address). This module stays ONLY so tenants
+ * created under the legacy Circle flow keep resolving their payout
+ * address. The Edge Function stays deployed for those legacy tenants and
+ * for nothing else.
+ *
+ * Non-custodial is the default for new merchants: Privy embedded wallet or
+ * a merchant-supplied address, direct transfers, check-payment
+ * reconciliation. The platform never holds signing power there.
+ *
+ * This module NO LONGER touches Circle's REST API from the browser: the API
+ * key and entity secret live only as Edge Function secrets, and the call
+ * below goes through the authenticated `circle-wallet` function (the user's
+ * own JWT scopes it to their tenant). Secrets in frontend code would let
+ * anyone with devtools operate every wallet — that flow is retired, do not
+ * reintroduce it.
  */
 
-import type { SDKConfig } from './types'
+import { supabase } from '../lib/supabase'
 
-// The Circle developer-controlled wallets SDK is a server-side package.
-// We call Circle's REST API directly here so the PoC runs in the browser.
-const CIRCLE_API_BASE = 'https://api.circle.com/v1/w3s'
+type CircleAction = 'resolve' | 'create' | 'get-or-create'
 
-interface CircleWallet {
-  id: string
-  address: string
-  blockchain: string
-  state: string
+interface CircleWalletResponse {
+  status?: string
+  address?: string
+  reason?: string
 }
 
-interface CircleApiResponse {
-  data?: {
-    wallets?: CircleWallet[]
-    walletSet?: { id: string }
+async function invokeCircleWallet(action: CircleAction): Promise<string | null> {
+  const res = await supabase.functions.invoke('circle-wallet', {
+    body: { action },
+  })
+  if (res.error) {
+    console.warn('[PayStyle] circle-wallet function failed', res.error)
+    return null
   }
-  message?: string
+  const data = (res.data ?? {}) as CircleWalletResponse
+  if (data.status !== 'ok' || typeof data.address !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(data.address)) {
+    return null
+  }
+  return data.address
 }
 
 /**
  * Attempt to fetch an existing wallet set + wallet for this merchant.
  * Returns the first Arc wallet address found, or null if none exist yet.
  *
- * In this PoC "merchant" is identified by the API key (one key = one merchant).
- * A real implementation would pass a merchantId to scope wallets.
+ * @deprecated LEGACY — legacy tenants only. New code must not call this;
+ * use the merchant's Privy embedded address (or BYOW) instead.
  */
-export async function resolveMerchantWallet(config: SDKConfig): Promise<string | null> {
-  try {
-    const res = await fetch(`${CIRCLE_API_BASE}/wallets?pageSize=10`, {
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    })
-    if (!res.ok) return null
-    const json = (await res.json()) as CircleApiResponse
-    const wallets: CircleWallet[] = json?.data?.wallets ?? []
-    // Prefer Arc Testnet wallets
-    const arcWallet = wallets.find(
-      (w) => w.blockchain === 'ARC-TESTNET' && w.state === 'LIVE',
-    )
-    if (arcWallet) return arcWallet.address
-    return null
-  } catch {
-    return null
-  }
+export async function resolveMerchantWallet(_config?: unknown): Promise<string | null> {
+  return invokeCircleWallet('resolve')
 }
 
 /**
  * Create a new wallet set + wallet for this merchant on Arc Testnet.
  * Returns the wallet address.
+ *
+ * @deprecated LEGACY — legacy tenants only. New code must not call this;
+ * use the merchant's Privy embedded address (or BYOW) instead.
  */
-export async function createMerchantWallet(config: SDKConfig): Promise<string> {
-  // 1. Create a wallet set
-  const setRes = await fetch(`${CIRCLE_API_BASE}/developer/walletSets`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      idempotencyKey: crypto.randomUUID(),
-      entitySecretCiphertext: config.entitySecret, // PoC: passed raw; prod: ciphertext
-      name: 'PayStyle Merchant Wallet Set',
-    }),
-  })
-
-  if (!setRes.ok) {
-    const err = (await setRes.json().catch(() => ({}))) as CircleApiResponse
-    throw new Error(
-      `Failed to create wallet set: ${err?.message ?? setRes.statusText}`,
-    )
-  }
-
-  const setJson = (await setRes.json()) as CircleApiResponse
-  const walletSetId: string = setJson?.data?.walletSet?.id ?? ''
-  if (!walletSetId) throw new Error('Wallet set ID missing from response')
-
-  // 2. Create a wallet in that set on ARC-TESTNET
-  const walletRes = await fetch(`${CIRCLE_API_BASE}/developer/wallets`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      idempotencyKey: crypto.randomUUID(),
-      entitySecretCiphertext: config.entitySecret,
-      blockchains: ['ARC-TESTNET'],
-      count: 1,
-      walletSetId,
-    }),
-  })
-
-  if (!walletRes.ok) {
-    const err = (await walletRes.json().catch(() => ({}))) as CircleApiResponse
-    throw new Error(
-      `Failed to create wallet: ${err?.message ?? walletRes.statusText}`,
-    )
-  }
-
-  const walletJson = (await walletRes.json()) as CircleApiResponse
-  const wallets: CircleWallet[] = walletJson?.data?.wallets ?? []
-  const newWallet = wallets[0]
-  if (!newWallet?.address) throw new Error('Wallet address missing from response')
-
-  return newWallet.address
+export async function createMerchantWallet(_config?: unknown): Promise<string> {
+  const address = await invokeCircleWallet('create')
+  if (!address) throw new Error('No se pudo crear la wallet (circle-wallet).')
+  return address
 }
 
 /**
  * Resolve the merchant wallet: returns existing or creates a new one.
+ *
+ * @deprecated LEGACY — legacy tenants only. New code must not call this;
+ * use the merchant's Privy embedded address (or BYOW) instead.
  */
-export async function getOrCreateMerchantWallet(config: SDKConfig): Promise<string> {
-  const existing = await resolveMerchantWallet(config)
-  if (existing) return existing
-  return createMerchantWallet(config)
+export async function getOrCreateMerchantWallet(_config?: unknown): Promise<string> {
+  const address = await invokeCircleWallet('get-or-create')
+  if (!address) throw new Error('No se pudo resolver la wallet (circle-wallet).')
+  return address
 }
