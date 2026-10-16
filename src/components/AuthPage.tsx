@@ -63,7 +63,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
         >
           <MessageSquare className="size-7 text-white" />
         </div>
-        <p className="display text-2xl font-bold" style={{ color: 'var(--ink)' }}>PayStyle</p>
+        <p className="display text-2xl font-bold" style={{ color: 'var(--ink)' }}>Treazury</p>
         <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>Cobros B2B por WhatsApp</p>
       </div>
 
@@ -200,7 +200,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
                   type="text"
                   value={businessName}
                   onChange={e => setBusinessName(e.target.value)}
-                  placeholder="Neumáticos El Rápido"
+                  placeholder="Nombre de tu negocio"
                   required
                   className="w-full rounded-xl py-3 pl-10 pr-4 text-sm outline-none"
                   style={{
@@ -290,7 +290,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
       {/* Approval note */}
       {!showRegister && (
         <p className="mt-4 max-w-xs text-center text-xs" style={{ color: 'var(--muted)' }}>
-          El acceso a PayStyle está disponible por invitación durante el Alpha.
+          El acceso a Treazury está disponible por invitación durante el Alpha.
         </p>
       )}
     </div>

@@ -7,13 +7,15 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Package, ShoppingCart, Wallet, Settings,
-  Menu, X, MessageCircle, LogOut, AlertCircle,
+  Package, ShoppingCart, Users, Wallet, Settings,
+  Menu, X, MessageCircle, LogOut, AlertCircle, Copy, Check, ArrowUpRight,
 } from 'lucide-react'
+import { TokenUSDC } from '@web3icons/react'
 import type { DashboardStore } from '@/store'
+import { useUsdcBalance, formatUsdc } from '@/hooks/useUsdcBalance'
+import SendFundsDialog from './SendFundsDialog'
 
-export type View = 'orders' | 'catalog' | 'charges' | 'settings'
-
+export type View = 'orders' | 'catalog' | 'customers' | 'charges' | 'settings'
 interface NavItem {
   id: View
   label: string
@@ -21,10 +23,11 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { id: 'orders',   label: 'Órdenes',       icon: <ShoppingCart className="size-4" /> },
-  { id: 'catalog',  label: 'Catálogo',      icon: <Package className="size-4" /> },
-  { id: 'charges',  label: 'Cobros',        icon: <Wallet className="size-4" /> },
-  { id: 'settings', label: 'Configuración', icon: <Settings className="size-4" /> },
+  { id: 'orders',    label: 'Órdenes',       icon: <ShoppingCart className="size-4" /> },
+  { id: 'catalog',   label: 'Catálogo',      icon: <Package className="size-4" /> },
+  { id: 'customers', label: 'Clientes',      icon: <Users className="size-4" /> },
+  { id: 'charges',   label: 'Cobros',        icon: <Wallet className="size-4" /> },
+  { id: 'settings',  label: 'Configuración', icon: <Settings className="size-4" /> },
 ]
 
 // ── Sidebar — extracted as top-level component to avoid "component in render" lint ──
@@ -33,9 +36,10 @@ interface SidebarProps {
   store: DashboardStore
   view: View
   onNav: (v: View) => void
+  onSignOut: () => void
 }
 
-function Sidebar({ store, view, onNav }: SidebarProps) {
+function Sidebar({ store, view, onNav, onSignOut }: SidebarProps) {
   const pendingCount = store.orders.filter(o => o.status === 'pending_payment').length
 
   return (
@@ -50,7 +54,7 @@ function Sidebar({ store, view, onNav }: SidebarProps) {
         </div>
         <div>
           <p className="display text-sm font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>
-            {store.config.name || 'PayStyle'}
+            {store.config.name || 'Treazury'}
           </p>
           <p className="text-xs" style={{ color: 'var(--subtle)' }}>Dashboard</p>
         </div>
@@ -80,21 +84,24 @@ function Sidebar({ store, view, onNav }: SidebarProps) {
                   {pendingCount}
                 </span>
               )}
+              {item.id === 'customers' && store.customers.length > 0 && (
+                <span
+                  className="ml-auto rounded-full px-2 py-0.5 text-xs font-semibold"
+                  style={{ background: 'var(--surface-muted)', color: 'var(--muted)', border: '1px solid var(--border)' }}
+                >
+                  {store.customers.length}
+                </span>
+              )}
             </button>
           )
         })}
       </nav>
 
-      {/* Wallet footer */}
+      {/* Funds counter footer */}
       <div className="p-4">
-        <div className="rounded-2xl px-3 py-2.5" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-          <p className="text-xs font-semibold" style={{ color: 'var(--subtle)' }}>Wallet</p>
-          <p className="mono mt-0.5 truncate text-xs" style={{ color: 'var(--ink-2)' }}>
-            {store.merchantAddress.slice(0, 8)}…{store.merchantAddress.slice(-6)}
-          </p>
-        </div>
+        <FundsCounter address={store.merchantAddress} />
         <button
-          onClick={store.disconnect}
+          onClick={onSignOut}
           className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all hover:opacity-80"
           style={{ color: 'var(--subtle)' }}
         >
@@ -106,16 +113,85 @@ function Sidebar({ store, view, onNav }: SidebarProps) {
   )
 }
 
+// ── FundsCounter — mostrador de fondos (saldo + tools, address colapsada) ──
+
+function FundsCounter({ address }: { address: string | null }) {
+  const { balance, loading } = useUsdcBalance(address)
+  const [copied, setCopied] = useState(false)
+  const [showAddress, setShowAddress] = useState(false)
+  const [showSend, setShowSend] = useState(false)
+
+  const handleCopy = () => {
+    if (!address) return
+    void navigator.clipboard.writeText(address).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div className="rounded-2xl px-3 py-3" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
+      {/* Saldo */}
+      <div className="flex items-center gap-2">
+        <TokenUSDC variant="branded" size={20} />
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold" style={{ color: 'var(--subtle)' }}>Saldo</p>
+          <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--ink)' }}>
+            {balance !== null ? `${formatUsdc(balance)} USDC` : loading ? '…' : '—'}
+          </p>
+        </div>
+      </div>
+
+      {/* Address colapsada */}
+      {address && (
+        <button
+          onClick={() => setShowAddress(v => !v)}
+          className="mt-2 flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-[11px] transition-colors hover:opacity-80"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+        >
+          <span className="mono truncate" style={{ color: 'var(--muted)' }}>
+            {address.slice(0, 6)}…{address.slice(-4)}
+          </span>
+          <span style={{ color: 'var(--subtle)' }}>{showAddress ? '−' : '+'}</span>
+        </button>
+      )}
+      {showAddress && address && (
+        <div className="mt-1.5 flex items-center gap-1">
+          <p className="mono min-w-0 flex-1 break-all text-[10px] leading-tight" style={{ color: 'var(--muted)' }}>
+            {address}
+          </p>
+          <button onClick={handleCopy} className="shrink-0 rounded-md p-1 transition-colors hover:opacity-80" style={{ color: copied ? 'var(--success)' : 'var(--subtle)' }}>
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          </button>
+        </div>
+      )}
+
+      {/* Herramientas de retiro */}
+      <div className="mt-2 space-y-1">
+        <button
+          onClick={() => setShowSend(true)}
+          className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors hover:opacity-80"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}
+        >
+          <ArrowUpRight className="size-3" />
+          Enviar / retirar fondos
+        </button>
+      </div>
+      <SendFundsDialog open={showSend} onClose={() => setShowSend(false)} senderAddress={address} />
+    </div>
+  )
+}
+
 // ── Shell ───────────────────────────────────────────────────────────────────
 
 interface ShellProps {
   store: DashboardStore
-  children: (view: View) => React.ReactNode
+  children: (view: View, onNav: (v: View) => void) => React.ReactNode
   tenant?: { business_name: string; merchant_wallet_address?: string | null }
   onSignOut?: () => void
 }
 
-export default function Shell({ store, children }: ShellProps) {
+export default function Shell({ store, children, onSignOut }: ShellProps) {
   const [view, setView] = useState<View>('orders')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -123,6 +199,9 @@ export default function Shell({ store, children }: ShellProps) {
     setView(v)
     setSidebarOpen(false)
   }
+  // Supabase sign-out comes from the app; the local wallet disconnect alone
+  // is only a fallback so the button never silently does nothing.
+  const handleSignOut = onSignOut ?? store.disconnect
 
   return (
     <div className="flex min-h-dvh" style={{ background: 'var(--bg-gradient)' }}>
@@ -130,7 +209,7 @@ export default function Shell({ store, children }: ShellProps) {
       {/* Desktop sidebar */}
       <aside className="hidden w-56 shrink-0 md:block" style={{ minHeight: '100dvh' }}>
         <div className="sticky top-0 h-dvh">
-          <Sidebar store={store} view={view} onNav={handleNav} />
+          <Sidebar store={store} view={view} onNav={handleNav} onSignOut={handleSignOut} />
         </div>
       </aside>
 
@@ -156,7 +235,7 @@ export default function Shell({ store, children }: ShellProps) {
               className="fixed left-0 top-0 z-50 w-56 md:hidden"
               style={{ height: '100dvh' }}
             >
-              <Sidebar store={store} view={view} onNav={handleNav} />
+              <Sidebar store={store} view={view} onNav={handleNav} onSignOut={handleSignOut} />
             </motion.aside>
           </>
         )}
@@ -221,7 +300,7 @@ export default function Shell({ store, children }: ShellProps) {
               </button>
             </div>
           )}
-          {children(view)}
+          {children(view, handleNav)}
         </div>
       </main>
     </div>
