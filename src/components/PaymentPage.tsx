@@ -10,6 +10,8 @@
  *   ?merchant=<0x…> Merchant address (solo cuando vault está presente, para mostrar)
  *   ?display=<ccy>  Moneda display del comprador (ARS, VES, …). Solo visual:
  *                   el cargo siempre se liquida en USDC.
+ *
+ * Styled in the Treazury luxe-dark theme (scoped to .luxe-landing).
  */
 
 import { useState, useEffect } from 'react'
@@ -47,18 +49,18 @@ const PAYMENT_METHODS: { id: MethodId; label: string; Icon: typeof Landmark; sta
 function CopyField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const [copied, setCopied] = useState(false)
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-      <span className="shrink-0 text-xs" style={{ color: 'var(--muted)' }}>{label}</span>
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+      <span className="shrink-0 text-xs text-slate-400">{label}</span>
       <span className="flex min-w-0 items-center gap-1.5">
-        <span className={`truncate text-xs font-semibold ${mono ? 'mono' : ''}`} style={{ color: 'var(--ink)' }}>{value}</span>
+        <span className={`truncate text-xs font-semibold text-white ${mono ? 'font-mono' : ''}`}>{value}</span>
         <button
           type="button"
           onClick={() => { void navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }) }}
-          className="shrink-0 rounded-md p-1 transition-colors hover:opacity-80"
-          style={{ color: copied ? 'var(--success)' : 'var(--subtle)' }}
+          className="shrink-0 rounded-md p-1 transition-colors hover:text-white"
+          style={{ color: copied ? 'var(--luxe-cyan)' : undefined }}
           aria-label={`Copiar ${label}`}
         >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5 text-slate-500" />}
         </button>
       </span>
     </div>
@@ -72,13 +74,6 @@ const VAULT_ABI = [
   { name: 'expectedAmount', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
   { name: 'received',       type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
 ] as const
-
-const glass = {
-  page:  { background: 'var(--bg-gradient)', minHeight: '100dvh' } as React.CSSProperties,
-  card:  { background: 'var(--surface)', backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)', border: '1px solid var(--border)' } as React.CSSProperties,
-  strip: { background: 'linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899, #f59e0b, #10b981)', height: '3px', borderRadius: '3px 3px 0 0' } as React.CSSProperties,
-  inner: { background: 'var(--surface-muted)', border: '1px solid var(--border)' } as React.CSSProperties,
-}
 
 interface VaultState {
   balance: bigint
@@ -225,11 +220,14 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
 
   if (!isValid) {
     return (
-      <div className="flex min-h-dvh items-center justify-center px-4" style={{ background: 'var(--bg-gradient)' }}>
-        <div className="max-w-sm rounded-3xl p-8 text-center" style={glass.card}>
-          <AlertCircle className="mx-auto mb-3 size-8" style={{ color: 'var(--danger)' }} />
-          <p className="display text-lg font-bold" style={{ color: 'var(--ink)' }}>Link de pago inválido</p>
-          <p className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>
+      <div className="luxe-landing relative flex min-h-dvh items-center justify-center px-4 font-sans">
+        <div className="pointer-events-none fixed inset-0 select-none overflow-hidden">
+          <div className="luxe-dotgrid absolute inset-0"></div>
+        </div>
+        <div className="luxe-glass relative z-10 max-w-sm rounded-[2rem] p-8 text-center">
+          <AlertCircle className="mx-auto mb-3 size-8 text-red-400" />
+          <p className="font-serif text-2xl font-medium text-white">Link de pago inválido</p>
+          <p className="mt-2 text-sm text-slate-400">
             Falta información requerida. Pídele al comerciante que comparta un link nuevo.
           </p>
         </div>
@@ -240,29 +238,32 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
   // ── Already swept / paid ────────────────────────────────────────────────────
   if (isSwepped || paidTx) {
     return (
-      <div className="flex min-h-dvh items-center justify-center px-4" style={{ background: 'var(--bg-gradient)' }}>
-        <div className="w-full max-w-sm overflow-hidden rounded-3xl" style={glass.card}>
-          <div style={glass.strip} />
+      <div className="luxe-landing relative flex min-h-dvh items-center justify-center px-4 font-sans">
+        <div className="pointer-events-none fixed inset-0 select-none overflow-hidden">
+          <div className="luxe-dotgrid absolute inset-0"></div>
+        </div>
+        <div className="luxe-glass relative z-10 w-full max-w-sm overflow-hidden rounded-[2rem]">
+          <div className="treazury-strip" />
           <div className="p-6 text-center">
-            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full" style={{ background: 'rgba(26,128,71,0.12)' }}>
-              <CheckCircle2 className="size-8" style={{ color: 'var(--success)' }} />
+            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/10">
+              <CheckCircle2 className="size-8 text-emerald-300" />
             </div>
-            <p className="display text-2xl font-bold" style={{ color: 'var(--ink)' }}>Pago recibido</p>
-            <p className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>
+            <p className="font-serif text-3xl font-medium text-white">Pago recibido</p>
+            <p className="mt-2 text-sm text-slate-400">
               ${amount} USDC · {memo}
             </p>
             {verifyState === 'verified' && (
-              <p className="mt-2 text-xs font-medium" style={{ color: 'var(--success)' }}>
+              <p className="mt-2 text-xs font-medium text-emerald-300">
                 Verificado onchain ✓
               </p>
             )}
             {verifyState === 'checking' && (
-              <p className="mt-2 text-xs" style={{ color: 'var(--muted)' }}>
+              <p className="mt-2 text-xs text-slate-400">
                 Verificando pago onchain…
               </p>
             )}
             {verifyState === 'pending' && (
-              <p className="mt-2 text-xs" style={{ color: 'var(--muted)' }}>
+              <p className="mt-2 text-xs text-slate-400">
                 Pago enviado — la confirmación onchain sigue pendiente.
               </p>
             )}
@@ -271,8 +272,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
                 href={`https://explorer.testnet.arc.io/tx/${paidTx}`}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-4 inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-mono transition-all hover:opacity-80"
-                style={{ background: 'var(--surface-muted)', color: 'var(--subtle)' }}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 font-mono text-xs text-slate-300 transition-all hover:text-white"
               >
                 {paidTx.slice(0, 10)}…{paidTx.slice(-8)}
                 <ExternalLink className="size-3" />
@@ -298,51 +298,55 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
   const transferSubtitle = [heroLocal, bankAlias.trim()].filter(Boolean).join(' · ') || 'Ver datos de transferencia'
 
   return (
-    <div className="flex min-h-dvh flex-col items-center px-4 py-8" style={glass.page}>
+    <div className="luxe-landing relative flex min-h-dvh flex-col items-center px-4 py-8 font-sans">
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 select-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 h-[38rem] w-[38rem] rounded-full bg-cyan-900/10 blur-[140px]"></div>
+        <div className="absolute top-1/3 -right-48 h-[42rem] w-[42rem] rounded-full bg-slate-600/5 blur-[160px]"></div>
+        <div className="luxe-dotgrid absolute inset-0"></div>
+      </div>
+
       {/* Merchant header */}
-      <div className="mb-5 flex flex-col items-center gap-1 text-center">
-        <div
-          className="display flex size-12 items-center justify-center rounded-2xl text-lg font-bold text-white"
-          style={{ background: 'var(--accent)' }}
-        >
+      <div className="relative z-10 mb-5 flex flex-col items-center gap-1 text-center">
+        <div className="luxe-glass flex size-12 items-center justify-center rounded-2xl font-serif text-lg font-medium text-white">
           {(merchantName || 'P').slice(0, 1).toUpperCase()}
         </div>
-        <p className="display text-lg font-bold" style={{ color: 'var(--ink)' }}>
+        <p className="font-serif text-2xl font-medium tracking-tight text-white">
           {merchantName || 'Treazury'}
         </p>
         {memo && (
-          <p className="text-sm" style={{ color: 'var(--muted)' }}>{memo}</p>
+          <p className="text-sm text-slate-400">{memo}</p>
         )}
       </div>
 
-      <div className="w-full max-w-sm space-y-4">
+      <div className="relative z-10 w-full max-w-sm space-y-4">
         {/* Charge card */}
-        <div className="overflow-hidden rounded-3xl" style={glass.card}>
-          <div style={glass.strip} />
+        <div className="luxe-glass overflow-hidden rounded-[1.5rem]">
+          <div className="treazury-strip" />
           <div className="p-6">
             {/* Amount hero — display currency first, never USDC upfront */}
             {heroLocal ? (
               <div className="flex items-baseline justify-center gap-2">
-                <span className="display text-5xl font-bold tabular-nums" style={{ color: 'var(--ink)' }}>
+                <span className="font-serif text-5xl font-medium tabular-nums text-white">
                   {heroLocal}
                 </span>
               </div>
             ) : (
               <div className="flex items-baseline justify-center gap-2">
                 <TokenUSDC variant="branded" size={32} />
-                <span className="display text-5xl font-bold tabular-nums" style={{ color: 'var(--ink)' }}>
+                <span className="font-serif text-5xl font-medium tabular-nums text-white">
                   ${amountNum.toFixed(2)}
                 </span>
-                <span className="text-lg font-medium" style={{ color: 'var(--subtle)' }}>USDC</span>
+                <span className="text-lg font-medium text-slate-400">USDC</span>
               </div>
             )}
             {displayCurrency && displayRate === null && (
-              <p className="mt-2 text-center text-xs" style={{ color: 'var(--subtle)' }}>Trayendo tasa…</p>
+              <p className="mt-2 text-center text-xs text-slate-500">Trayendo tasa…</p>
             )}
 
             {/* Vault state: partial payment banner */}
             {isPartial && (
-              <div className="mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#b45309' }}>
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-200">
                 <Clock className="mt-0.5 size-3.5 shrink-0" />
                 <span>
                   Pago parcial recibido: <strong>${vaultReceived}</strong> de <strong>${vaultExpected}</strong>.
@@ -353,7 +357,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
 
             {/* Vault loading indicator */}
             {hasVault && vaultLoading && !vaultState && (
-              <p className="mt-2 text-center text-xs" style={{ color: 'var(--subtle)' }}>
+              <p className="mt-2 text-center text-xs text-slate-500">
                 Verificando estado del vault…
               </p>
             )}
@@ -369,17 +373,13 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
               return (
                 <div
                   key={method.id}
-                  className="flex items-center gap-3 rounded-2xl px-4 py-3.5 opacity-60"
-                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 opacity-60"
                 >
-                  <method.Icon className="size-5 shrink-0" style={{ color: 'var(--subtle)' }} />
-                  <span className="flex-1 text-left text-sm font-semibold" style={{ color: 'var(--muted)' }}>
+                  <method.Icon className="size-5 shrink-0 text-slate-500" />
+                  <span className="flex-1 text-left text-sm font-semibold text-slate-400">
                     {method.label}
                   </span>
-                  <span
-                    className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                    style={{ background: 'var(--surface-muted)', color: 'var(--subtle)', border: '1px solid var(--border)' }}
-                  >
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-slate-500">
                     Próximamente
                   </span>
                 </div>
@@ -387,33 +387,33 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
             }
             const open = openMethod === method.id
             return (
-              <div key={method.id} className="overflow-hidden rounded-2xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div key={method.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
                 <button
                   type="button"
                   onClick={() => setOpenMethod(open ? null : method.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:opacity-90"
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.04]"
                 >
-                  <method.Icon className="size-5 shrink-0" style={{ color: 'var(--accent)' }} />
+                  <method.Icon className="size-5 shrink-0 text-icyCyan" />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                    <span className="block text-sm font-semibold text-white">
                       {method.label}
                     </span>
-                    <span className="block truncate text-xs" style={{ color: 'var(--muted)' }}>
+                    <span className="block truncate text-xs text-slate-400">
                       {method.id === 'transfer' ? transferSubtitle : `$${amountNum.toFixed(2)} USDC`}
                     </span>
                   </span>
                   <ChevronDown
-                    className="size-4 shrink-0 transition-transform"
-                    style={{ color: 'var(--subtle)', transform: open ? 'rotate(180deg)' : undefined }}
+                    className="size-4 shrink-0 text-slate-500 transition-transform"
+                    style={{ transform: open ? 'rotate(180deg)' : undefined }}
                   />
                 </button>
                 {open && (
-                  <div className="border-t px-4 py-4" style={{ borderColor: 'var(--border)' }}>
+                  <div className="border-t border-white/10 px-4 py-4">
                     {method.id === 'transfer' ? (
                       <div className="space-y-2.5">
                         <div className="flex items-baseline justify-between">
-                          <span className="text-xs" style={{ color: 'var(--muted)' }}>A transferir</span>
-                          <span className="display text-2xl font-bold tabular-nums" style={{ color: 'var(--ink)' }}>
+                          <span className="text-xs text-slate-400">A transferir</span>
+                          <span className="font-serif text-2xl font-medium tabular-nums text-white">
                             {heroLocal ?? `$${amountNum.toFixed(2)}`}
                           </span>
                         </div>
@@ -421,15 +421,15 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
                           <CopyField label="Alias" value={bankAlias.trim()} />
                         )}
                         {bankName.trim() && (
-                          <div className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-                            <span className="text-xs" style={{ color: 'var(--muted)' }}>Banco</span>
-                            <span className="text-xs font-semibold" style={{ color: 'var(--ink)' }}>{bankName.trim()}</span>
+                          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                            <span className="text-xs text-slate-400">Banco</span>
+                            <span className="text-xs font-semibold text-white">{bankName.trim()}</span>
                           </div>
                         )}
                         {bankAccount.trim() && (
                           <CopyField label={accountLabelForCurrency(displayCurrency, bankAccount.trim())} value={bankAccount.trim()} mono />
                         )}
-                        <p className="text-[11px] leading-relaxed" style={{ color: 'var(--subtle)' }}>
+                        <p className="text-[11px] leading-relaxed text-slate-500">
                           Transfiere el total exacto y avísale al comerciante — confirmará el pago manualmente.
                         </p>
                       </div>
@@ -450,8 +450,8 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
           })}
         </div>
 
-        <p className="text-center text-xs" style={{ color: 'var(--subtle)' }}>
-          Pagos seguros con <span className="font-semibold">Treazury</span>
+        <p className="text-center text-xs text-slate-500">
+          Pagos seguros con <span className="font-serif font-medium text-slate-300">Treazury</span>
         </p>
       </div>
     </div>
