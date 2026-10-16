@@ -10,6 +10,8 @@ import type { DashboardStore } from '@/store'
 import { invoiceFactory } from '@/modules/invoicing/factory'
 import type { InvoiceEngine } from '@/modules/invoicing'
 import type { CountryCode } from '@/modules/shared/types'
+import { countryMeta, currencyForCountry, readPricingPref, writePricingPref, readBankDetails, writeBankDetails } from '@/lib/currency'
+import type { PricingPref, BankDetails } from '@/lib/currency'
 
 /**
  * Fiscal engine driving the labels below. Sourced from the registered invoice
@@ -40,17 +42,42 @@ const inputStyle = { background: 'var(--surface-muted)', border: '1px solid var(
 interface SettingsViewProps {
   store: DashboardStore
   tenant?: { business_name: string; tax_id?: string | null; apply_igtf?: boolean }
+  tenantId: string
   onTenantUpdate?: () => Promise<void>
 }
 
-export default function SettingsView({ store, onTenantUpdate }: SettingsViewProps) {
+export default function SettingsView({ store, tenantId, onTenantUpdate }: SettingsViewProps) {
   const [form, setForm] = useState({ ...store.config })
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const engines = invoiceFactory.list()
-  const fiscalEngine = engineForCountry(form.country) ?? engines[0]
+  // No fallback: if the country has no registered engine, fiscalEngine is
+  // undefined and the UI shows "not available" instead of another country's fields.
+  const fiscalEngine = engineForCountry(form.country)
+  // Contact examples follow the selected fiscal country — never VE defaults.
+  const meta = countryMeta(form.country)
+  // Merchant pricing preference: which currency price forms open in.
+  // 'auto' follows the fiscal country. Shared with Catalog + Cobros toggles.
+  const prefCurrency = currencyForCountry(form.country)
+  const [pricingPref, setPricingPref] = useState<PricingPref>(() => readPricingPref(tenantId))
+  const pickPricing = (pref: PricingPref) => {
+    setPricingPref(pref)
+    writePricingPref(tenantId, pref)
+  }
+  // Bank details for the transfer option in payment links. Stored per tenant
+  // locally; each generated link embeds them (?balias=&bname=&bacct=).
+  const [bank, setBank] = useState<BankDetails>(() => readBankDetails(tenantId))
+  const [bankSaved, setBankSaved] = useState(false)
+  const patchBank = (k: keyof BankDetails, v: string) =>
+    setBank(b => ({ ...b, [k]: v }))
+  const handleBankSave = () => {
+    writeBankDetails(tenantId, { bankName: bank.bankName.trim(), alias: bank.alias.trim(), account: bank.account.trim() })
+    setBank(b => ({ bankName: b.bankName.trim(), alias: b.alias.trim(), account: b.account.trim() }))
+    setBankSaved(true)
+    setTimeout(() => setBankSaved(false), 2500)
+  }
 
   const patch = (k: keyof typeof form, v: string | boolean) =>
     setForm(f => ({ ...f, [k]: v }))
@@ -93,27 +120,87 @@ export default function SettingsView({ store, onTenantUpdate }: SettingsViewProp
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Teléfono</label>
-            <input className={inputCls} style={inputStyle} value={form.phone} onChange={e => patch('phone', e.target.value)} placeholder="+58 412 000 0000" />
+            <input className={inputCls} style={inputStyle} value={form.phone} onChange={e => patch('phone', e.target.value)} placeholder={`${meta.dialCode} ${meta.phoneExample}`} />
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Email</label>
             <input className={inputCls} style={inputStyle} value={form.email} onChange={e => patch('email', e.target.value)} placeholder="info@negocio.com" />
           </div>
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Dirección fiscal</label>
-          <input className={inputCls} style={inputStyle} value={form.address} onChange={e => patch('address', e.target.value)} placeholder="Av. Principal, Caracas" />
+      </Section>
+
+      {/* Pricing currency preference */}
+      <Section icon={<Wallet className="size-4" />} title="Moneda para cargar precios">
+        <p className="text-xs" style={{ color: 'var(--muted)' }}>
+          Catálogo y Cobros abren en esta moneda. El cobro siempre se liquida en USDC.
+        </p>
+        <div className="flex gap-1.5">
+          {([
+            { id: 'auto' as PricingPref, label: `Automática (${prefCurrency})` },
+            { id: 'usd' as PricingPref, label: 'USD' },
+            ...(prefCurrency !== 'USD' ? [{ id: 'local' as PricingPref, label: prefCurrency }] : []),
+          ]).map(opt => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => pickPricing(opt.id)}
+              className="flex-1 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all"
+              style={pricingPref === opt.id
+                ? { background: 'var(--accent)', color: '#fff', border: '1px solid transparent' }
+                : { background: 'var(--surface-muted)', color: 'var(--ink-2)', border: '1px solid var(--border)' }}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       </Section>
 
+      {/* Bank details for the transfer option in payment links */}
+      <Section icon={<Building2 className="size-4" />} title="Datos para cobrar por transferencia">
+        <p className="text-xs" style={{ color: 'var(--muted)' }}>
+          Salen en tus links de pago para que el cliente te transfiera. Si los dejas vacíos, esa opción no aparece.
+        </p>
+        <div>
+          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Banco</label>
+          <input className={inputCls} style={inputStyle} value={bank.bankName} onChange={e => patchBank('bankName', e.target.value)} placeholder={meta.bankExample} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{meta.aliasLabel}</label>
+            <input className={inputCls} style={inputStyle} value={bank.alias} onChange={e => patchBank('alias', e.target.value)} placeholder={meta.aliasExample} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{meta.accountLabel}</label>
+            <input className={`${inputCls} mono`} style={inputStyle} value={bank.account} onChange={e => patchBank('account', e.target.value)} placeholder={meta.accountExample} />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleBankSave}
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
+          style={{ background: 'var(--accent)' }}
+        >
+          <Check className="size-4" /> {bankSaved ? 'Guardado' : 'Guardar datos bancarios'}
+        </button>
+      </Section>
+
       {/* Fiscal data — country-aware */}
-      <Section icon={<Receipt className="size-4" />} title={`Datos fiscales — ${fiscalEngine?.countryName ?? 'Sin motor'}`}>
-        {engines.length === 0 ? (
-          <div
-            className="rounded-xl px-3 py-2.5 text-xs"
-            style={{ background: 'rgba(186,43,76,0.08)', border: '1px solid rgba(186,43,76,0.2)', color: 'var(--danger)' }}
-          >
-            No hay motores de facturación registrados. No se pueden emitir facturas.
+      <Section
+        icon={<Receipt className="size-4" />}
+        title={fiscalEngine ? `Datos fiscales — ${fiscalEngine.countryName}` : 'Facturación'}
+      >
+        {!fiscalEngine ? (
+          <div className="space-y-3">
+            <div
+              className="rounded-xl px-4 py-3 text-sm"
+              style={{ background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.2)', color: '#92400e' }}
+            >
+              La facturación local aún no está disponible para tu país.
+              Estamos habilitando nuevos países progresivamente.
+            </div>
+            <p className="text-xs" style={{ color: 'var(--muted)' }}>
+              Mientras tanto, podés cobrar en USDC y compartir links de pago normalmente.
+            </p>
           </div>
         ) : (
           <>
@@ -130,6 +217,10 @@ export default function SettingsView({ store, onTenantUpdate }: SettingsViewProp
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Dirección fiscal</label>
+              <input className={inputCls} style={inputStyle} value={form.address} onChange={e => patch('address', e.target.value)} placeholder={fiscalEngine.addressPlaceholder ?? 'Dirección fiscal'} />
             </div>
             {fiscalEngine && (
               <>
@@ -153,53 +244,55 @@ export default function SettingsView({ store, onTenantUpdate }: SettingsViewProp
                 </div>
               </>
             )}
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Prefijo de factura</label>
+              <input
+                className={`${inputCls} mono`} style={inputStyle}
+                value={form.invoicePrefix}
+                onChange={e => patch('invoicePrefix', e.target.value)}
+                placeholder="0001"
+              />
+            </div>
+
+            {/* IGTF toggle — solo para VE */}
+            {fiscalEngine && fiscalEngine.country === 'VE' && (
+              <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Aplicar IGTF 3%</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>Impuesto a pagos en divisas (USDC)</p>
+                </div>
+                <button onClick={() => patch('applyIgtf', !form.applyIgtf)}>
+                  {form.applyIgtf
+                    ? <ToggleRight className="size-8" style={{ color: 'var(--accent)' }} />
+                    : <ToggleLeft className="size-8" style={{ color: 'var(--subtle)' }} />
+                  }
+                </button>
+              </div>
+            )}
+
+            {!form.rif ? (
+              <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(217,119,6,0.08)', color: '#b45309', border: '1px solid rgba(217,119,6,0.2)' }}>
+                <AlertCircle className="size-3.5 shrink-0" />
+                El {fiscalEngine?.taxIdLabel ?? 'ID fiscal'} es requerido para emitir facturas válidas{fiscalEngine ? ` en ${fiscalEngine.countryName}` : ''}.
+              </div>
+            ) : fiscalEngine && !fiscalEngine.validateTaxId(form.rif.trim()) ? (
+              <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(217,119,6,0.08)', color: '#b45309', border: '1px solid rgba(217,119,6,0.2)' }}>
+                <AlertCircle className="size-3.5 shrink-0" />
+                El formato no parece válido. Ej: {fiscalEngine.taxIdExample}
+              </div>
+            ) : null}
           </>
         )}
-        <div>
-          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Prefijo de factura</label>
-          <input
-            className={`${inputCls} mono`} style={inputStyle}
-            value={form.invoicePrefix}
-            onChange={e => patch('invoicePrefix', e.target.value)}
-            placeholder="0001"
-          />
-        </div>
-
-        {/* IGTF toggle */}
-        <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-          <div>
-            <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Aplicar IGTF 3%</p>
-            <p className="text-xs" style={{ color: 'var(--muted)' }}>Impuesto a pagos en divisas (USDC)</p>
-          </div>
-          <button onClick={() => patch('applyIgtf', !form.applyIgtf)}>
-            {form.applyIgtf
-              ? <ToggleRight className="size-8" style={{ color: 'var(--accent)' }} />
-              : <ToggleLeft className="size-8" style={{ color: 'var(--subtle)' }} />
-            }
-          </button>
-        </div>
-
-        {!form.rif ? (
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(217,119,6,0.08)', color: '#b45309', border: '1px solid rgba(217,119,6,0.2)' }}>
-            <AlertCircle className="size-3.5 shrink-0" />
-            El {fiscalEngine?.taxIdLabel ?? 'ID fiscal'} es requerido para emitir facturas válidas{fiscalEngine ? ` en ${fiscalEngine.countryName}` : ''}.
-          </div>
-        ) : fiscalEngine && !fiscalEngine.validateTaxId(form.rif.trim()) ? (
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(217,119,6,0.08)', color: '#b45309', border: '1px solid rgba(217,119,6,0.2)' }}>
-            <AlertCircle className="size-3.5 shrink-0" />
-            El formato no parece válido. Ej: {fiscalEngine.taxIdExample}
-          </div>
-        ) : null}
       </Section>
 
       {/* Wallet */}
       <Section icon={<Wallet className="size-4" />} title="Wallet de cobro">
         <div className="rounded-2xl px-4 py-3" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-          <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Dirección activa (Circle Developer-Controlled)</p>
+          <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Dirección activa</p>
           <p className="mono mt-1 break-all text-xs" style={{ color: 'var(--ink-2)' }}>{store.merchantAddress || '—'}</p>
         </div>
         <p className="text-xs" style={{ color: 'var(--subtle)' }}>
-          La wallet se asigna al conectar tu cuenta Circle. Los fondos recibidos en los cobros van a esta dirección en Arc Testnet.
+          Es tu propia dirección: los cobros van directo a tu wallet en Arc Testnet. PayStyle nunca custodia tus fondos.
         </p>
       </Section>
 
@@ -214,7 +307,7 @@ export default function SettingsView({ store, onTenantUpdate }: SettingsViewProp
         onClick={handleSave}
         disabled={saving}
         className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-all hover:scale-[1.01] disabled:opacity-60"
-        style={{ background: saved ? '#1a8047' : 'var(--accent)' }}
+        style={{ background: saved ? 'var(--success)' : 'var(--accent)' }}
       >
         <Check className="size-4" />
         {saving ? 'Guardando…' : saved ? 'Configuración guardada' : 'Guardar configuración'}

@@ -2,13 +2,15 @@
  * CatalogView — gestión de productos con campos dinámicos, variantes y stock.
  */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Pencil, Trash2, Package, ChevronDown, ChevronUp,
   X, Check, AlertCircle,
 } from 'lucide-react'
 import type { DashboardStore, Product, ProductVariant, FieldDefinition } from '@/store'
+import { currencyForCountry, fetchUsdRate, formatLocal, readPricingPref, writePricingPref, resolveEntryCurrency } from '@/lib/currency'
+import type { PricingPref } from '@/lib/currency'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -44,15 +46,30 @@ function StockBadge({ stock }: { stock: number }) {
 
 interface ProductFormProps {
   initial?: Product
-  onSave: (data: Omit<Product, 'id' | 'createdAt'>) => Promise<void>
+  onSave: (data: Omit<Product, 'id' | 'createdAt'>) => void
   onCancel: () => void
+  localCurrency: string
+  fxRate: number | null
+  /** Entry mode from the merchant's pricing preference (auto-resolved). */
+  initialCurrency: 'usd' | 'local'
+  /** Persists toggle changes back to the preference — pick once, sticks everywhere. */
+  onCurrencyChange: (mode: 'usd' | 'local') => void
 }
 
-function ProductForm({ initial, onSave, onCancel }: ProductFormProps) {
+function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initialCurrency, onCurrencyChange }: ProductFormProps) {
   const [name, setName] = useState(initial?.name ?? '')
   const [sku, setSku] = useState(initial?.sku ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
-  const [price, setPrice] = useState(initial?.price ?? '')
+  // Stored prices are always USD. When editing with a local-currency
+  // preference, convert once for display (needs fxRate; falls back to the
+  // raw USD value while the rate loads).
+  const [price, setPrice] = useState(() => {
+    if (initial?.price && initialCurrency === 'local' && fxRate && fxRate > 0) {
+      return String(parseFloat(initial.price) * fxRate)
+    }
+    return initial?.price ?? ''
+  })
+  const [priceCurrency, setPriceCurrency] = useState<'usd' | 'local'>(initialCurrency)
   const [unit, setUnit] = useState(initial?.unit ?? 'unidad')
   const [stock, setStock] = useState(String(initial?.stock ?? 0))
   const [variants, setVariants] = useState<ProductVariant[]>(initial?.variants ?? [])
@@ -67,16 +84,19 @@ function ProductForm({ initial, onSave, onCancel }: ProductFormProps) {
     if (!price || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
       setError('Ingresa un precio válido.'); return
     }
+    // Convert local currency to USD for storage (prices are always stored in USD/USDC)
+    let usdPrice = parseFloat(price)
+    if (priceCurrency === 'local' && fxRate && fxRate > 0) {
+      usdPrice = usdPrice / fxRate
+    }
     const totalStock = variants.length > 0
       ? variants.reduce((s, v) => s + v.stock, 0)
       : parseInt(stock, 10) || 0
 
-    // Saving is a network write; failures are reported by the parent, which
-    // owns the store call. Nothing to await here.
     void onSave({
       name: name.trim(), sku: sku.trim() || undefined,
       description: description.trim() || undefined,
-      price: parseFloat(price).toFixed(2),
+      price: usdPrice.toFixed(2),
       unit, stock: totalStock,
       variants: variants.filter(v => v.label.trim()),
       fieldDefs: fieldDefs.filter(f => f.key.trim() && f.label.trim()),
@@ -112,7 +132,7 @@ function ProductForm({ initial, onSave, onCancel }: ProductFormProps) {
       style={{ background: 'var(--surface)', border: '1px solid var(--border)', backdropFilter: 'blur(20px)' }}
     >
       {/* Rainbow strip */}
-      <div style={{ height: 3, background: 'linear-gradient(90deg,#6366f1,#8b5cf6,#ec4899,#f59e0b,#10b981)', borderRadius: '3px 3px 0 0' }} />
+      <div className="treazury-strip" />
 
       <div className="p-5 space-y-4">
         <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>
@@ -123,7 +143,7 @@ function ProductForm({ initial, onSave, onCancel }: ProductFormProps) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Nombre *</label>
-            <input className={inputCls} style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Neumático 205/55R16" />
+            <input className={inputCls} style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="Nombre del producto" />
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>SKU (opcional)</label>
@@ -136,8 +156,39 @@ function ProductForm({ initial, onSave, onCancel }: ProductFormProps) {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Precio base (USD) *</label>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Precio base *</label>
+              {localCurrency !== 'USD' && (
+                <div className="flex overflow-hidden rounded-lg text-[11px] font-semibold" style={{ border: '1px solid var(--border)' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setPriceCurrency('usd'); onCurrencyChange('usd') }}
+                    disabled={fxRate === null}
+                    className="px-2 py-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: priceCurrency === 'usd' ? 'var(--accent)' : 'var(--surface-muted)', color: priceCurrency === 'usd' ? '#fff' : 'var(--muted)' }}
+                  >USD</button>
+                  <button
+                    type="button"
+                    onClick={() => { setPriceCurrency('local'); onCurrencyChange('local') }}
+                    disabled={fxRate === null}
+                    className="px-2 py-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: priceCurrency === 'local' ? 'var(--accent)' : 'var(--surface-muted)', color: priceCurrency === 'local' ? '#fff' : 'var(--muted)' }}
+                  >{localCurrency}</button>
+                  {fxRate === null && <span className="px-2 py-0.5 text-[10px]" style={{ color: 'var(--subtle)' }}>cargando tasa…</span>}
+                </div>
+              )}
+            </div>
             <input className={inputCls} style={inputStyle} inputMode="decimal" value={price} onChange={e => setPrice(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" />
+            {price && parseFloat(price) > 0 && localCurrency !== 'USD' && fxRate !== null && (
+              <p className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>
+                {priceCurrency === 'usd'
+                  ? `≈ ${formatLocal(parseFloat(price) * fxRate, localCurrency as never)}`
+                  : `≈ $${(parseFloat(price) / fxRate).toFixed(2)} USD`}
+              </p>
+            )}
+            {price && parseFloat(price) > 0 && localCurrency !== 'USD' && fxRate === null && (
+              <p className="mt-1 text-xs" style={{ color: 'var(--subtle)' }}>calculando equivalente…</p>
+            )}
           </div>
           {!showVariants && (
             <div>
@@ -178,7 +229,7 @@ function ProductForm({ initial, onSave, onCancel }: ProductFormProps) {
                       style={inputStyle}
                       value={v.label}
                       onChange={e => patchVariant(v.id, { label: e.target.value })}
-                      placeholder="Ej: 205/55R16"
+                      placeholder="Ej: Talle M"
                     />
                     <input
                       className="w-20 rounded-xl px-3 py-2 text-sm outline-none tabular-nums"
@@ -311,9 +362,11 @@ interface ProductCardProps {
   onEdit: () => void
   onDelete: () => void
   onStockAdjust: (variantId: string | undefined, delta: number) => void
+  localCurrency: string
+  fxRate: number | null
 }
 
-const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(function ProductCard({ product, onEdit, onDelete, onStockAdjust }, _ref) {
+const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(function ProductCard({ product, onEdit, onDelete, onStockAdjust, localCurrency, fxRate }, _ref) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -349,6 +402,11 @@ const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(function 
               <span className="text-xs" style={{ color: 'var(--subtle)' }}>/ {product.unit}</span>
             </div>
           </div>
+          {localCurrency !== 'USD' && fxRate !== null && (
+            <p className="mt-0.5 text-xs" style={{ color: 'var(--muted)' }}>
+              ≈ {formatLocal(parseFloat(product.price) * fxRate, localCurrency as never)}
+            </p>
+          )}
 
           <div className="mt-2 flex items-center gap-2 flex-wrap">
             <StockBadge stock={product.stock} />
@@ -423,10 +481,30 @@ const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(function 
 
 // ── Root ────────────────────────────────────────────────────────────────────
 
-export default function CatalogView({ store }: { store: DashboardStore }) {
+export default function CatalogView({ store, tenantId }: { store: DashboardStore; tenantId: string }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [fxRate, setFxRate] = useState<number | null>(null)
+  // Merchant pricing preference (auto = follow country). Picked once in any
+  // price form or Settings; every form opens in it from then on.
+  const [pref, setPref] = useState<PricingPref>(() => readPricingPref(tenantId))
+
+  const localCurrency = currencyForCountry(store.config.country)
+  const entryCurrency = resolveEntryCurrency(pref, store.config.country)
+  const persistCurrency = (mode: 'usd' | 'local') => {
+    setPref(mode)
+    writePricingPref(tenantId, mode)
+  }
+
+  useEffect(() => {
+    if (localCurrency === 'USD') return
+    let cancelled = false
+    void fetchUsdRate(localCurrency).then(rate => {
+      if (!cancelled && rate) setFxRate(rate.usdToLocal)
+    })
+    return () => { cancelled = true }
+  }, [localCurrency])
 
   // Both branches are network writes now; the form only closes when the
   // database accepted the row.
@@ -487,9 +565,14 @@ export default function CatalogView({ store }: { store: DashboardStore }) {
             exit={{ opacity: 0, y: -8 }}
           >
             <ProductForm
+              key={editingId ?? 'new'}
               initial={editingProduct}
-              onSave={handleSave}
+              onSave={(data) => { void handleSave(data) }}
               onCancel={() => { setShowForm(false); setEditingId(null) }}
+              localCurrency={localCurrency}
+              fxRate={fxRate}
+              initialCurrency={entryCurrency}
+              onCurrencyChange={persistCurrency}
             />
           </motion.div>
         )}
@@ -529,6 +612,8 @@ export default function CatalogView({ store }: { store: DashboardStore }) {
               onEdit={() => { setEditingId(product.id); setShowForm(false) }}
               onDelete={() => handleDelete(product.id)}
               onStockAdjust={(variantId, delta) => handleStockAdjust(product.id, variantId, delta)}
+              localCurrency={localCurrency}
+              fxRate={fxRate}
             />
           ))
         )}

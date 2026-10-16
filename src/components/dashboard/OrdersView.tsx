@@ -3,16 +3,18 @@
  * generar link de pago, ver estado y gestionar órdenes.
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, ShoppingCart, X, MessageCircle, ExternalLink,
   Copy, CheckCheck, ChevronDown, ChevronUp, AlertCircle, Loader2,
+  Search, User, Check,
 } from 'lucide-react'
 import { TokenUSDC } from '@web3icons/react'
 import type { Customer, DashboardStore, Order, OrderLine } from '@/store'
 import { invoiceFactory } from '@/modules/invoicing/factory'
 import type { CountryCode } from '@/modules/shared/types'
+import { currencyForCountry, countryMeta, fetchUsdRate, formatLocal, readPricingPref, resolveEntryCurrency, readBankDetails } from '@/lib/currency'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -27,12 +29,16 @@ function readLastUsedId(): string | null {
   }
 }
 
-/** Tenant's registered engine for buyer-tax labels/validation (VE fallback). */
+/**
+ * Tenant's registered engine for buyer-tax labels/validation, or undefined
+ * when the country has no invoicing engine yet. NEVER falls back to another
+ * country's engine — an AR account must not see RIF labels or VE validation.
+ */
 function engineForCountry(country: CountryCode) {
   try {
     return invoiceFactory.get(country)
   } catch {
-    return invoiceFactory.get('VE')
+    return undefined
   }
 }
 
@@ -47,8 +53,13 @@ function statusLabel(s: Order['status']) {
   return map[s]
 }
 
-function calcTotal(lines: OrderLine[], applyIgtf: boolean) {
+function calcTotal(lines: OrderLine[], applyIgtf: boolean, hasFiscalEngine: boolean) {
   const subtotal = lines.reduce((s, l) => s + parseFloat(l.unitPrice) * l.quantity, 0)
+  // No invoicing engine for the country (AR, MX, …) → no automatic taxes.
+  // The merchant charges the plain subtotal instead of VE's 16% + 3%.
+  if (!hasFiscalEngine) {
+    return { subtotal, iva: 0, igtf: 0, total: subtotal }
+  }
   const iva = subtotal * 0.16
   const base = subtotal + iva
   const igtf = applyIgtf ? base * 0.03 : 0
@@ -73,12 +84,19 @@ function CopyBtn({ text }: { text: string }) {
 
 interface NewOrderFormProps {
   store: DashboardStore
+  tenantId: string
   onCreated: (order: Order) => Promise<void>
   onCancel: () => void
 }
 
-function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
+function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProps) {
   const engine = engineForCountry(store.config.country)
+  // Contact examples follow the merchant's country — never VE defaults.
+  const meta = countryMeta(store.config.country)
+  // Merchant pricing preference (set in Config or any price toggle): the
+  // whole order form reads in this currency. Storage stays USD.
+  const [entryCurrency] = useState<'usd' | 'local'>(() =>
+    resolveEntryCurrency(readPricingPref(tenantId), store.config.country))
 
   // Mount-time seed: the form opens after the tenant load, so the customer
   // list is already populated. The last-used customer is pre-selected as the
@@ -100,7 +118,47 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<OrderLine[]>([])
   const [error, setError] = useState('')
+  const [fxRate, setFxRate] = useState<number | null>(null)
 
+  const localCurrency = currencyForCountry(store.config.country)
+
+  useEffect(() => {
+    if (localCurrency === 'USD') return
+    let cancelled = false
+    void fetchUsdRate(localCurrency).then(rate => {
+      if (!cancelled && rate) setFxRate(rate.usdToLocal)
+    })
+    return () => { cancelled = true }
+  }, [localCurrency])
+
+  // Local-currency view of a USD amount, or null when the merchant prices in
+  // USD / the rate hasn't loaded. Display-only: storage stays USD.
+  const inLocal = (usd: number): string | null =>
+    entryCurrency === 'local' && localCurrency !== 'USD' && fxRate !== null
+      ? formatLocal(usd * fxRate, localCurrency)
+      : null
+
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!dropdownOpen) return
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target instanceof Node ? e.target : null
+      if (dropdownRef.current && target && !dropdownRef.current.contains(target)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('touchstart', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [dropdownOpen])
+
+  const selectedCustomer = store.customers.find(c => c.id === selectedId)
   const lastUsedId = readLastUsedId()
   const query = search.trim().toLowerCase()
   const filteredCustomers = query
@@ -116,11 +174,14 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
     setBuyerEmail(customer.email ?? '')
     setBuyerAddress(customer.address ?? '')
     setSaveCustomer(false)
+    setSearch('')
+    setDropdownOpen(false)
     setError('')
   }
 
   const switchMode = (next: 'saved' | 'new') => {
     setMode(next)
+    setDropdownOpen(false)
     if (next === 'new') {
       setSelectedId(null)
       setSaveCustomer(true)
@@ -130,7 +191,9 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
     setError('')
   }
 
-  const { subtotal, iva, igtf, total } = calcTotal(lines, store.config.applyIgtf)
+  // IGTF only exists in VE; without a fiscal engine there are no auto taxes.
+  const hasFiscalEngine = engine !== undefined
+  const { subtotal, iva, igtf, total } = calcTotal(lines, store.config.applyIgtf && hasFiscalEngine, hasFiscalEngine)
 
   const addLine = (productId: string) => {
     const product = store.products.find(p => p.id === productId)
@@ -178,7 +241,10 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
   // order row, its lines and the stock reservations are separate writes.
   const handleCreate = async () => {
     if (!buyerName.trim()) { setError('El nombre del comprador es requerido.'); return }
-    if (buyerTaxId.trim() && !engine.validateBuyerTaxId(buyerTaxId.trim())) {
+    // Only validate the buyer tax ID when the country has an invoicing
+    // engine. Without one (AR, MX, …) the field is free text — validating an
+    // Argentine CUIT against VE RIF rules would wrongly reject it.
+    if (engine && buyerTaxId.trim() && !engine.validateBuyerTaxId(buyerTaxId.trim())) {
       setError(`El ${engine.buyerTaxIdLabel} no tiene un formato válido. Ej: ${engine.buyerTaxIdExample}`)
       return
     }
@@ -223,7 +289,7 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
 
   return (
     <div className="overflow-hidden rounded-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-      <div style={{ height: 3, background: 'linear-gradient(90deg,#6366f1,#8b5cf6,#ec4899,#f59e0b,#10b981)', borderRadius: '3px 3px 0 0' }} />
+      <div className="treazury-strip" />
       <div className="p-5 space-y-4">
         <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>Nueva orden</h3>
 
@@ -253,63 +319,216 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
             <p className="px-1 py-2 text-xs" style={{ color: 'var(--muted)' }}>Cargando clientes…</p>
           ) : mode === 'saved' && store.customers.length > 0 ? (
             <div className="space-y-2">
-              <input
-                className={inputCls} style={inputStyle}
-                value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar por nombre, teléfono o email…"
-              />
-              <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl p-1" style={{ border: '1px solid var(--border)' }}>
-                {filteredCustomers.length === 0 ? (
-                  <p className="px-3 py-3 text-xs" style={{ color: 'var(--muted)' }}>
-                    Sin coincidencias. Escribe los datos abajo o cambia a “Nuevo”.
-                  </p>
-                ) : filteredCustomers.map(customer => {
-                  const active = customer.id === selectedId
-                  return (
-                    <button
-                      key={customer.id}
-                      onClick={() => selectCustomer(customer)}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition-all hover:opacity-80"
-                      style={active
-                        ? { background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.35)', color: 'var(--ink)' }
-                        : { background: 'var(--surface-muted)', border: '1px solid transparent', color: 'var(--ink)' }}
+              {/* If a customer is selected and dropdown is closed, show selected summary */}
+              {selectedCustomer && !dropdownOpen ? (
+                <div
+                  className="flex items-center justify-between rounded-2xl p-2.5 transition-all"
+                  style={{
+                    background: 'rgba(99,102,241,0.08)',
+                    border: '1px solid rgba(99,102,241,0.3)',
+                    color: 'var(--ink)',
+                  }}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className="flex size-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold"
+                      style={{ background: 'var(--accent)', color: '#fff' }}
                     >
-                      <span className="min-w-0">
-                        <span className="block truncate text-xs font-semibold">{customer.name}</span>
-                        {(customer.phone || customer.email) && (
-                          <span className="block truncate text-xs" style={{ color: 'var(--muted)' }}>
-                            {[customer.phone, customer.email].filter(Boolean).join(' · ')}
+                      <User className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-xs font-bold">{selectedCustomer.name}</span>
+                        {selectedCustomer.id === lastUsedId && (
+                          <span
+                            className="shrink-0 rounded-full px-1.5 py-0.2 text-[10px] font-semibold"
+                            style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)' }}
+                          >
+                            Habitual
                           </span>
                         )}
-                      </span>
-                      {customer.id === lastUsedId && (
-                        <span className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)' }}>
-                          Habitual
+                      </div>
+                      {(selectedCustomer.phone || selectedCustomer.taxId || selectedCustomer.email) && (
+                        <span className="block truncate text-[11px]" style={{ color: 'var(--muted)' }}>
+                          {[selectedCustomer.phone, selectedCustomer.taxId, selectedCustomer.email].filter(Boolean).join(' · ')}
                         </span>
                       )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDropdownOpen(true)
+                        setTimeout(() => searchInputRef.current?.focus(), 50)
+                      }}
+                      className="rounded-xl px-2.5 py-1 text-xs font-semibold transition-all hover:opacity-80"
+                      style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--accent)' }}
+                    >
+                      Cambiar
                     </button>
-                  )
-                })}
-              </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Combobox Search Input + Dropdown */}
+              {(!selectedCustomer || dropdownOpen) && (
+                <div ref={dropdownRef} className="relative">
+                  <div className="relative">
+                    <Search
+                      className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 pointer-events-none"
+                      style={{ color: 'var(--muted)' }}
+                    />
+                    <input
+                      ref={searchInputRef}
+                      className={`${inputCls} pl-10 pr-16`}
+                      style={inputStyle}
+                      value={search}
+                      onChange={e => {
+                        setSearch(e.target.value)
+                        if (!dropdownOpen) setDropdownOpen(true)
+                      }}
+                      onFocus={() => setDropdownOpen(true)}
+                      placeholder={`Buscar por nombre, WhatsApp, ${engine ? engine.buyerTaxIdLabel : 'documento'} o email…`}
+                      autoComplete="off"
+                    />
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {search && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearch('')
+                            searchInputRef.current?.focus()
+                          }}
+                          className="flex size-5 items-center justify-center rounded-full hover:opacity-70"
+                          style={{ color: 'var(--muted)' }}
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setDropdownOpen(o => !o)}
+                        className="flex size-6 items-center justify-center rounded-lg hover:opacity-70 transition-all"
+                        style={{ color: 'var(--muted)' }}
+                      >
+                        {dropdownOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Dropdown Menu */}
+                  <AnimatePresence>
+                    {dropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute left-0 right-0 top-full mt-1.5 z-40 max-h-56 overflow-y-auto rounded-2xl p-1 space-y-0.5 shadow-xl"
+                        style={{
+                          background: 'var(--surface-strong)',
+                          border: '1px solid var(--border)',
+                          boxShadow: '0 8px 30px rgba(18,45,69,0.12)',
+                        }}
+                      >
+                        {filteredCustomers.length === 0 ? (
+                          <div className="p-3 text-center text-xs space-y-1.5" style={{ color: 'var(--muted)' }}>
+                            <p>Sin coincidencias para “{search}”</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                switchMode('new')
+                                setBuyerName(search)
+                                setDropdownOpen(false)
+                              }}
+                              className="inline-flex items-center gap-1 text-xs font-semibold hover:underline"
+                              style={{ color: 'var(--accent)' }}
+                            >
+                              <Plus className="size-3" />
+                              Usar como nuevo comprador
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            {filteredCustomers.map(customer => {
+                              const active = customer.id === selectedId
+                              return (
+                                <button
+                                  key={customer.id}
+                                  type="button"
+                                  onClick={() => selectCustomer(customer)}
+                                  className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm transition-all hover:opacity-90"
+                                  style={active
+                                    ? { background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.35)', color: 'var(--ink)' }
+                                    : { background: 'transparent', border: '1px solid transparent', color: 'var(--ink)' }}
+                                >
+                                  <span className="min-w-0 flex-1">
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="truncate text-xs font-bold">{customer.name}</span>
+                                      {customer.id === lastUsedId && (
+                                        <span
+                                          className="shrink-0 rounded-full px-1.5 py-0.2 text-[10px] font-semibold"
+                                          style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)' }}
+                                        >
+                                          Habitual
+                                        </span>
+                                      )}
+                                    </span>
+                                    {(customer.phone || customer.taxId || customer.email) && (
+                                      <span className="block truncate text-[11px]" style={{ color: 'var(--muted)' }}>
+                                        {[customer.phone, customer.taxId, customer.email].filter(Boolean).join(' · ')}
+                                      </span>
+                                    )}
+                                  </span>
+
+                                  {active && (
+                                    <Check className="size-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                                  )}
+                                </button>
+                              )
+                            })}
+
+                            <div className="border-t pt-1 mt-1" style={{ borderColor: 'var(--border)' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  switchMode('new')
+                                  setDropdownOpen(false)
+                                }}
+                                className="flex w-full items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold hover:opacity-80 transition-all"
+                                style={{ color: 'var(--accent)' }}
+                              >
+                                <Plus className="size-3.5" />
+                                Registrar nuevo cliente
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
           ) : null}
-
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Nombre del comprador *</label>
-              <input className={inputCls} style={inputStyle} value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder="Ej: Neumáticos El Centro" />
+              <input className={inputCls} style={inputStyle} value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder="Ej: Comercio El Centro" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-                WhatsApp <span className="font-normal opacity-60">(+58 412...)</span>
+                WhatsApp <span className="font-normal opacity-60">({meta.dialCode}…)</span>
               </label>
-              <input className={inputCls} style={inputStyle} value={buyerPhone} onChange={e => setBuyerPhone(e.target.value)} placeholder="+58 412 000 0000" />
+              <input className={inputCls} style={inputStyle} value={buyerPhone} onChange={e => setBuyerPhone(e.target.value)} placeholder={`${meta.dialCode} ${meta.phoneExample}`} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-                {engine.buyerTaxIdLabel} <span className="font-normal opacity-60">(opcional)</span>
+                {engine ? engine.buyerTaxIdLabel : 'ID fiscal'} <span className="font-normal opacity-60">(opcional)</span>
               </label>
-              <input className={inputCls} style={inputStyle} value={buyerTaxId} onChange={e => setBuyerTaxId(e.target.value)} placeholder={engine.buyerTaxIdPlaceholder} />
+              <input className={inputCls} style={inputStyle} value={buyerTaxId} onChange={e => setBuyerTaxId(e.target.value)} placeholder={engine ? engine.buyerTaxIdPlaceholder : 'Documento fiscal del comprador'} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
@@ -322,7 +541,7 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
               Dirección <span className="font-normal opacity-60">(opcional)</span>
             </label>
-            <input className={inputCls} style={inputStyle} value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} placeholder="Av. Principal, Caracas" />
+            <input className={inputCls} style={inputStyle} value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} placeholder={`Av. Principal, ${meta.cityExample}`} />
           </div>
 
           <label className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}>
@@ -358,6 +577,9 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
                       <span>{product.name} — <span className="font-medium">{v.label}</span></span>
                       <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
                         <span className="tabular-nums">${parseFloat(v.price ?? product.price).toFixed(2)}</span>
+                        {inLocal(parseFloat(v.price ?? product.price)) && (
+                          <span className="tabular-nums" style={{ color: 'var(--subtle)' }}>≈ {inLocal(parseFloat(v.price ?? product.price))}</span>
+                        )}
                         <span style={{ color: v.stock === 0 ? 'var(--danger)' : 'var(--success)' }}>({v.stock} disp.)</span>
                         <Plus className="size-3.5" style={{ color: 'var(--accent)' }} />
                       </span>
@@ -371,12 +593,15 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
                     className="flex w-full items-center justify-between px-3 py-2.5 text-sm transition-all hover:opacity-80 disabled:opacity-40"
                     style={{ color: 'var(--ink)', background: 'var(--surface-muted)', borderBottom: '1px solid var(--border)' }}
                   >
-                    <span>{product.name}</span>
-                    <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
-                      <span className="tabular-nums">${parseFloat(product.price).toFixed(2)}</span>
-                      <span style={{ color: product.stock === 0 ? 'var(--danger)' : 'var(--success)' }}>({product.stock} disp.)</span>
-                      <Plus className="size-3.5" style={{ color: 'var(--accent)' }} />
-                    </span>
+                      <span>{product.name}</span>
+                      <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
+                        <span className="tabular-nums">${parseFloat(product.price).toFixed(2)}</span>
+                        {inLocal(parseFloat(product.price)) && (
+                          <span className="tabular-nums" style={{ color: 'var(--subtle)' }}>≈ {inLocal(parseFloat(product.price))}</span>
+                        )}
+                        <span style={{ color: product.stock === 0 ? 'var(--danger)' : 'var(--success)' }}>({product.stock} disp.)</span>
+                        <Plus className="size-3.5" style={{ color: 'var(--accent)' }} />
+                      </span>
                   </button>
                 )}
               </div>
@@ -398,8 +623,13 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
                   <span className="mono w-6 text-center text-xs tabular-nums" style={{ color: 'var(--ink)' }}>{line.quantity}</span>
                   <button onClick={() => patchQty(idx, line.quantity + 1)} className="flex size-6 items-center justify-center rounded-lg text-sm font-bold" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink)' }}>+</button>
                 </div>
-                <span className="mono w-16 text-right text-xs tabular-nums" style={{ color: 'var(--ink-2)' }}>
+                <span className="mono w-24 text-right text-xs tabular-nums" style={{ color: 'var(--ink-2)' }}>
                   ${(parseFloat(line.unitPrice) * line.quantity).toFixed(2)}
+                  {inLocal(parseFloat(line.unitPrice) * line.quantity) && (
+                    <span className="block text-[10px]" style={{ color: 'var(--subtle)' }}>
+                      ≈ {inLocal(parseFloat(line.unitPrice) * line.quantity)}
+                    </span>
+                  )}
                 </span>
                 <button onClick={() => removeLine(idx)}><X className="size-3.5" style={{ color: 'var(--subtle)' }} /></button>
               </div>
@@ -409,21 +639,52 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
             <div className="rounded-xl px-3 py-3 space-y-1" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
               {[
                 { label: 'Subtotal', value: subtotal },
-                { label: 'IVA 16%', value: iva },
-                ...(store.config.applyIgtf ? [{ label: 'IGTF 3%', value: igtf }] : []),
+                ...(hasFiscalEngine ? [{ label: 'IVA 16%', value: iva }] : []),
+                ...(hasFiscalEngine && store.config.applyIgtf ? [{ label: 'IGTF 3%', value: igtf }] : []),
               ].map(row => (
                 <div key={row.label} className="flex justify-between text-xs" style={{ color: 'var(--muted)' }}>
                   <span>{row.label}</span>
                   <span className="mono tabular-nums">${row.value.toFixed(2)}</span>
                 </div>
               ))}
-              <div className="flex justify-between border-t pt-1.5 text-sm font-bold" style={{ borderColor: 'var(--border)', color: 'var(--ink)' }}>
-                <span>Total USDC</span>
-                <span className="flex items-center gap-1 mono tabular-nums">
-                  <TokenUSDC variant="branded" size={14} />
-                  ${total.toFixed(2)}
-                </span>
-              </div>
+              {!hasFiscalEngine && (
+                <p className="text-[11px]" style={{ color: 'var(--subtle)' }}>
+                  Sin impuestos automáticos — facturación aún no disponible para tu país.
+                </p>
+              )}
+              {inLocal(total) ? (
+                <>
+                  <div className="flex justify-between border-t pt-1.5 text-sm font-bold" style={{ borderColor: 'var(--border)', color: 'var(--ink)' }}>
+                    <span>Total {localCurrency}</span>
+                    <span className="mono tabular-nums">{inLocal(total)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs" style={{ color: 'var(--muted)' }}>
+                    <span>Se cobra en USDC</span>
+                    <span className="flex items-center gap-1 mono tabular-nums">
+                      <TokenUSDC variant="branded" size={14} />
+                      ${total.toFixed(2)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between border-t pt-1.5 text-sm font-bold" style={{ borderColor: 'var(--border)', color: 'var(--ink)' }}>
+                    <span>Total USDC</span>
+                    <span className="flex items-center gap-1 mono tabular-nums">
+                      <TokenUSDC variant="branded" size={14} />
+                      ${total.toFixed(2)}
+                    </span>
+                  </div>
+                  {localCurrency !== 'USD' && fxRate !== null && (
+                    <div className="flex justify-between text-xs" style={{ color: 'var(--muted)' }}>
+                      <span>≈ Total en {localCurrency}</span>
+                      <span className="mono tabular-nums">
+                        {formatLocal(total * fxRate, localCurrency)}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}
@@ -453,11 +714,24 @@ function NewOrderForm({ store, onCreated, onCancel }: NewOrderFormProps) {
 
 // ── Order card ─────────────────────────────────────────────────────────────
 
-function OrderCard({ order, store }: { order: Order; store: DashboardStore }) {
+function OrderCard({ order, store, tenantId }: { order: Order; store: DashboardStore; tenantId: string }) {
   const [expanded, setExpanded] = useState(false)
   const [actionError, setActionError] = useState('')
   const st = statusLabel(order.status)
-  const payUrl = `${window.location.origin}?to=${store.merchantAddress}&amount=${order.total}&chargeId=${order.id}&memo=${encodeURIComponent(order.orderNumber)}`
+  // Buyer display currency + merchant/bank details for the payment link.
+  const linkExtra = (() => {
+    const c = currencyForCountry(store.config.country)
+    const bank = readBankDetails(tenantId)
+    const params = new URLSearchParams()
+    if (c !== 'USD') params.set('display', c)
+    if (store.config.name) params.set('mname', store.config.name)
+    if (bank.bankName) params.set('bname', bank.bankName)
+    if (bank.alias) params.set('balias', bank.alias)
+    if (bank.account) params.set('bacct', bank.account)
+    const s = params.toString()
+    return s ? `&${s}` : ''
+  })()
+  const payUrl = `${window.location.origin}?to=${store.merchantAddress}&amount=${order.total}&chargeId=${order.id}&memo=${encodeURIComponent(order.orderNumber)}${linkExtra}`
 
   // Writing the link also creates the charge row (charges.payment_url is where
   // the URL lives), so it is a round trip that can fail under RLS.
@@ -471,6 +745,15 @@ function OrderCard({ order, store }: { order: Order; store: DashboardStore }) {
     setActionError('')
     void store.updateOrder(order.id, { status: 'cancelled' })
       .catch((err: unknown) => setActionError(err instanceof Error ? err.message : 'No se pudo cancelar la orden.'))
+  }
+
+  const [markingPaid, setMarkingPaid] = useState(false)
+  const handleMarkPaid = () => {
+    setActionError('')
+    setMarkingPaid(true)
+    void store.markChargePaid(order.id)
+      .catch((err: unknown) => setActionError(err instanceof Error ? err.message : 'No se pudo marcar como pagado.'))
+      .finally(() => setMarkingPaid(false))
   }
 
   const waText = encodeURIComponent(
@@ -527,15 +810,28 @@ function OrderCard({ order, store }: { order: Order; store: DashboardStore }) {
         {order.paymentUrl && (
           <>
             <CopyBtn text={order.paymentUrl} />
-            <a
-              href={`https://wa.me/${order.buyerPhone.replace(/\D/g, '')}?text=${waText}`}
-              target="_blank" rel="noreferrer"
-              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition-all hover:scale-[1.02]"
-              style={{ background: '#25D366' }}
-            >
-              <MessageCircle className="size-3.5" /> Enviar WA
-            </a>
+            {order.buyerPhone && (
+              <a
+                href={`https://wa.me/${order.buyerPhone.replace(/\D/g, '')}?text=${waText}`}
+                target="_blank" rel="noreferrer"
+                className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition-all hover:scale-[1.02]"
+                style={{ background: '#25D366' }}
+              >
+                <MessageCircle className="size-3.5" /> Enviar WA
+              </a>
+            )}
           </>
+        )}
+
+        {(order.status === 'pending_payment' || order.status === 'partially_paid') && (
+          <button
+            onClick={handleMarkPaid}
+            disabled={markingPaid}
+            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all hover:scale-[1.02] disabled:opacity-50"
+            style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)', border: '1px solid rgba(26,128,71,0.2)' }}
+          >
+            <CheckCheck className="size-3.5" /> {markingPaid ? 'Marcando…' : 'Marcar como pagado'}
+          </button>
         )}
 
         {order.status !== 'cancelled' && order.status !== 'paid' && (
@@ -589,16 +885,35 @@ function OrderCard({ order, store }: { order: Order; store: DashboardStore }) {
 
 // ── Root ────────────────────────────────────────────────────────────────────
 
-export default function OrdersView({ store }: { store: DashboardStore }) {
+export default function OrdersView({ store, tenantId }: { store: DashboardStore; tenantId: string }) {
   const [showForm, setShowForm] = useState(false)
   const [linkError, setLinkError] = useState('')
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | Order['status']>('all')
+  // Buyer display currency for payment links (settlement stays USDC).
+  const displayQuery = (() => {
+    const c = currencyForCountry(store.config.country)
+    return c === 'USD' ? '' : `&display=${c}`
+  })()
+  // Merchant identity + bank details for the payment page (Linktree header
+  // + transfer option). Read live so just-saved Config applies to next link.
+  const merchantQuery = (() => {
+    const bank = readBankDetails(tenantId)
+    const params = new URLSearchParams()
+    if (store.config.name) params.set('mname', store.config.name)
+    if (bank.bankName) params.set('bname', bank.bankName)
+    if (bank.alias) params.set('balias', bank.alias)
+    if (bank.account) params.set('bacct', bank.account)
+    const s = params.toString()
+    return s ? `&${s}` : ''
+  })()
 
   // The order is already persisted by the time this runs, so a failure here
   // must not look like a failed creation: the order stays, the error says
   // only that the payment link was not generated.
   const handleCreated = async (order: Order) => {
     setShowForm(false)
-    const payUrl = `${window.location.origin}?to=${store.merchantAddress}&amount=${order.total}&chargeId=${order.id}&memo=${encodeURIComponent(order.orderNumber)}`
+    const payUrl = `${window.location.origin}?to=${store.merchantAddress}&amount=${order.total}&chargeId=${order.id}&memo=${encodeURIComponent(order.orderNumber)}${displayQuery}${merchantQuery}`
     try {
       await store.updateOrder(order.id, { status: 'pending_payment', paymentUrl: payUrl })
       setLinkError('')
@@ -607,8 +922,21 @@ export default function OrdersView({ store }: { store: DashboardStore }) {
     }
   }
 
-  const pending = store.orders.filter(o => o.status === 'pending_payment' || o.status === 'partially_paid')
-  const rest = store.orders.filter(o => o.status !== 'pending_payment' && o.status !== 'partially_paid')
+  const q = query.trim().toLowerCase()
+  const matches = (o: Order) => {
+    if (statusFilter !== 'all' && o.status !== statusFilter) return false
+    if (!q) return true
+    return (
+      o.orderNumber.toLowerCase().includes(q) ||
+      (o.buyerName ?? '').toLowerCase().includes(q) ||
+      (o.buyerPhone ?? '').toLowerCase().includes(q) ||
+      (o.paymentUrl ?? '').toLowerCase().includes(q)
+    )
+  }
+  const filtered = store.orders.filter(matches)
+  const pending = filtered.filter(o => o.status === 'pending_payment' || o.status === 'partially_paid')
+  const rest = filtered.filter(o => o.status !== 'pending_payment' && o.status !== 'partially_paid')
+  const hasQuery = q !== '' || statusFilter !== 'all'
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -624,6 +952,45 @@ export default function OrdersView({ store }: { store: DashboardStore }) {
           <Plus className="size-4" /> Nueva orden
         </button>
       </div>
+
+      {store.orders.length > 0 && (
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" style={{ color: 'var(--subtle)' }} />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Buscar por N°, cliente, teléfono…"
+              className="w-full rounded-xl py-2.5 pl-9 pr-3 text-sm outline-none"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink)' }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                { key: 'all', label: 'Todas' },
+                { key: 'pending_payment', label: 'Pendientes' },
+                { key: 'paid', label: 'Pagadas' },
+                { key: 'draft', label: 'Borradores' },
+                { key: 'cancelled', label: 'Canceladas' },
+              ] as const
+            ).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                className="rounded-full px-3 py-1 text-xs font-medium transition-all"
+                style={
+                  statusFilter === tab.key
+                    ? { background: 'var(--accent)', color: '#fff' }
+                    : { background: 'var(--surface)', color: 'var(--muted)', border: '1px solid var(--border)' }
+                }
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {linkError && (
         <div className="flex items-start gap-2 rounded-2xl px-4 py-3 text-xs" style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}>
@@ -642,7 +1009,7 @@ export default function OrdersView({ store }: { store: DashboardStore }) {
       <AnimatePresence>
         {showForm && (
           <motion.div key="form" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-            <NewOrderForm store={store} onCreated={handleCreated} onCancel={() => setShowForm(false)} />
+            <NewOrderForm store={store} tenantId={tenantId} onCreated={handleCreated} onCancel={() => setShowForm(false)} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -655,17 +1022,32 @@ export default function OrdersView({ store }: { store: DashboardStore }) {
         </div>
       )}
 
+      {store.orders.length > 0 && hasQuery && filtered.length === 0 && (
+        <div className="flex flex-col items-center gap-3 rounded-3xl py-16 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <Search className="size-10" style={{ color: 'var(--subtle)' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--ink-2)' }}>Sin resultados</p>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>No hay órdenes que coincidan con tu búsqueda.</p>
+          <button
+            onClick={() => { setQuery(''); setStatusFilter('all') }}
+            className="rounded-full px-3 py-1 text-xs font-medium"
+            style={{ background: 'var(--surface-muted)', color: 'var(--ink-2)', border: '1px solid var(--border)' }}
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      )}
+
       <AnimatePresence mode="popLayout">
         {pending.length > 0 && (
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)', letterSpacing: '0.08em' }}>Pendientes de pago</p>
-            {pending.map(o => <OrderCard key={o.id} order={o} store={store} />)}
+            {pending.map(o => <OrderCard key={o.id} order={o} store={store} tenantId={tenantId} />)}
           </div>
         )}
         {rest.length > 0 && (
           <div className="space-y-3">
             {pending.length > 0 && <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)', letterSpacing: '0.08em' }}>Historial</p>}
-            {rest.map(o => <OrderCard key={o.id} order={o} store={store} />)}
+            {rest.map(o => <OrderCard key={o.id} order={o} store={store} tenantId={tenantId} />)}
           </div>
         )}
       </AnimatePresence>

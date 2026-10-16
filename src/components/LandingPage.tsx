@@ -249,7 +249,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                       title="Treazury Demo Video"
                     ></iframe>
                   </div>
-                  <div className="p-3.5 bg-[#0a0c10]/95 border-t border-white/10 flex items-center justify-between">
+                  <div className="p-3.5 bg-graphite/95 border-t border-white/10 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs">
                         💬
