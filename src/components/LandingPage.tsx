@@ -1,602 +1,438 @@
 /**
- * PayStyle — Landing Page
+ * Treazury — Landing Page (luxe-editorial dark style).
  *
- * Arc Light mode. Dashboard archetype para el comerciante venezolano.
- * Estructura: Navbar → Hero → Features → How it works → CTA → Footer
+ * React port of the Treazury design brief. CTA buttons call onEnterApp,
+ * which routes into the app auth flow (App stage 'landing' -> 'auth').
+ * Interactive bits (Demo/Calculator tabs, fee slider, terms pill) are
+ * React state. The demo video is a youtube-nocookie placeholder iframe.
  */
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import {
-  MessageCircle,
-  Zap,
-  ShieldCheck,
-  BarChart3,
-  Package,
-  FileText,
-  ArrowRight,
-  CheckCircle,
-  ChevronRight,
-} from 'lucide-react'
 
 interface LandingPageProps {
   onEnterApp: () => void
   showRegister: boolean
 }
 
-// ─── Fade-in wrapper ────────────────────────────────────────────────────────
+type Tab = 'demo' | 'calc'
 
-function FadeIn({
-  children,
-  delay = 0,
-  className = '',
-}: {
-  children: React.ReactNode
-  delay?: number
-  className?: string
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
+const MIN_VOLUME = 1000
+const MAX_VOLUME = 150000
+const DEFAULT_VOLUME = 25000
+// Benchmarks for the savings readout: TradFi/SWIFT-style 3.04% vs the
+// 0.35% protocol rate capped at $15.
+const BANK_RATE = 0.0304
+const PROTOCOL_RATE = 0.0035
+const PROTOCOL_CAP = 15
+
+function formatVolume(v: number): string {
+  return `$${v.toLocaleString('en-US')} USDC`
 }
 
-// ─── Navbar ─────────────────────────────────────────────────────────────────
-
-function Navbar({
-  onEnterApp,
-  showRegister,
-}: {
-  onEnterApp: () => void
-  showRegister: boolean
-}) {
-  return (
-    <nav
-      style={{
-        background: 'rgba(255,255,255,0.80)',
-        backdropFilter: 'blur(16px)',
-        borderBottom: '1px solid var(--border)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-      }}
-    >
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3">
-        <div className="flex items-center gap-2">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ background: 'var(--ink)' }}
-          >
-            <MessageCircle size={16} color="white" strokeWidth={2.5} />
-          </div>
-          <span
-            className="display text-lg font-bold"
-            style={{ color: 'var(--ink)', letterSpacing: '-0.03em' }}
-          >
-            PayStyle
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {showRegister && (
-            <button
-              onClick={onEnterApp}
-              className="text-sm font-medium"
-              style={{ color: 'var(--muted)' }}
-            >
-              Iniciar sesión
-            </button>
-          )}
-          <button
-            onClick={onEnterApp}
-            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors"
-            style={{ background: 'var(--ink)' }}
-            onMouseEnter={e =>
-              ((e.currentTarget).style.background =
-                'var(--accent-hover)')
-            }
-            onMouseLeave={e =>
-              ((e.currentTarget).style.background =
-                'var(--ink)')
-            }
-          >
-            {showRegister ? 'Crear cuenta' : 'Acceder'}
-            <ChevronRight size={14} strokeWidth={2.5} />
-          </button>
-        </div>
-      </div>
-    </nav>
-  )
+function formatSavings(volume: number): string {
+  const bankFee = volume * BANK_RATE
+  const protocolFee = Math.min(volume * PROTOCOL_RATE, PROTOCOL_CAP)
+  if (bankFee <= 0) return '+0.0%'
+  const savings = (1 - protocolFee / bankFee) * 100
+  return `+${savings.toFixed(1)}%`
 }
-
-// ─── Feature card ────────────────────────────────────────────────────────────
-
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode
-  title: string
-  description: string
-}) {
-  return (
-    <div
-      className="rounded-2xl p-5"
-      style={{
-        background: 'var(--surface-strong)',
-        border: '1px solid var(--border)',
-        backdropFilter: 'blur(8px)',
-      }}
-    >
-      <div
-        className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl"
-        style={{ background: 'var(--surface-muted)' }}
-      >
-        {icon}
-      </div>
-      <p
-        className="mb-1.5 text-sm font-semibold"
-        style={{ color: 'var(--ink)' }}
-      >
-        {title}
-      </p>
-      <p
-        className="text-sm leading-relaxed"
-        style={{ color: 'var(--muted)' }}
-      >
-        {description}
-      </p>
-    </div>
-  )
-}
-
-// ─── Step item ───────────────────────────────────────────────────────────────
-
-function Step({
-  number,
-  title,
-  description,
-}: {
-  number: number
-  title: string
-  description: string
-}) {
-  return (
-    <div className="flex gap-4">
-      <div className="flex flex-col items-center">
-        <div
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-          style={{ background: 'var(--ink)' }}
-        >
-          {number}
-        </div>
-        {number < 4 && (
-          <div
-            className="mt-1 w-px flex-1"
-            style={{ background: 'var(--border)', minHeight: '32px' }}
-          />
-        )}
-      </div>
-      <div className="pb-6">
-        <p className="mb-1 text-sm font-semibold" style={{ color: 'var(--ink)' }}>
-          {title}
-        </p>
-        <p
-          className="text-sm leading-relaxed"
-          style={{ color: 'var(--muted)' }}
-        >
-          {description}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-// ─── Main component ──────────────────────────────────────────────────────────
 
 export default function LandingPage({ onEnterApp, showRegister }: LandingPageProps) {
-  const [hoverCta, setHoverCta] = useState(false)
+  const [tab, setTab] = useState<Tab>('demo')
+  const [volume, setVolume] = useState(DEFAULT_VOLUME)
+  const [termsVisible, setTermsVisible] = useState(true)
 
-  const features = [
-    {
-      icon: <MessageCircle size={20} style={{ color: 'var(--ink)' }} />,
-      title: 'Cobros por WhatsApp',
-      description:
-        'Genera un link de pago en segundos y compártelo directo en tu conversación de WhatsApp. Tu cliente paga sin instalar nada.',
-    },
-    {
-      icon: <Zap size={20} style={{ color: 'var(--ink)' }} />,
-      title: 'Liquidación instantánea',
-      description:
-        'Los pagos en USDC llegan en segundos a tu wallet. Sin esperas de 3 días, sin chargebacks, sin intermediarios bancarios.',
-    },
-    {
-      icon: <Package size={20} style={{ color: 'var(--ink)' }} />,
-      title: 'Catálogo y stock',
-      description:
-        'Administra tus productos con variantes, unidades de medida y stock en tiempo real. Crea pedidos directamente desde el catálogo.',
-    },
-    {
-      icon: <FileText size={20} style={{ color: 'var(--ink)' }} />,
-      title: 'Facturación venezolana',
-      description:
-        'Genera facturas con RIF, IVA 16% e IGTF 3% para pagos en divisas. Conforme con los requisitos del SENIAT.',
-    },
-    {
-      icon: <ShieldCheck size={20} style={{ color: 'var(--ink)' }} />,
-      title: 'Pagos verificables',
-      description:
-        'Cada cobro tiene una dirección onchain única. Cualquier transferencia a esa dirección confirma el pago automáticamente.',
-    },
-    {
-      icon: <BarChart3 size={20} style={{ color: 'var(--ink)' }} />,
-      title: 'Panel del comerciante',
-      description:
-        'Historial de órdenes, estado de cada cobro en tiempo real, y acceso a tus fondos desde un solo lugar.',
-    },
-  ]
+  const heroCtaLabel = showRegister ? 'Create Free Account' : 'Enter Dashboard'
 
-  const steps = [
-    {
-      title: 'Crea tu cuenta',
-      description:
-        'Conecta tu cuenta Circle y en segundos tienes una wallet de cobro lista para recibir USDC.',
-    },
-    {
-      title: 'Agrega tus productos',
-      description:
-        'Carga tu catálogo con precios, variantes y stock. Una sola vez, lo usas en todos tus pedidos.',
-    },
-    {
-      title: 'Crea el pedido y genera el link',
-      description:
-        'Selecciona los productos, ingresa los datos del comprador y presiona "Enviar por WhatsApp".',
-    },
-    {
-      title: 'Tu cliente paga y listo',
-      description:
-        'El comprador abre el link, transfiere el USDC desde cualquier wallet o exchange, y el pago se confirma al instante.',
-    },
-  ]
-
-  const benefits = [
-    'Sin cuenta bancaria ni requisitos',
-    'Precio fijo en USDC, sin volatilidad',
-    'Factura automática con IVA e IGTF',
-    'Stock actualizado con cada venta',
-    'Historial completo de tus cobros',
-    'Funciona en cualquier teléfono',
-  ]
+  const tabButton = (active: boolean) =>
+    `w-1/2 py-2 px-4 text-xs font-mono tracking-wider rounded-full transition-all duration-300 ${
+      active
+        ? 'text-white bg-white/10 border border-white/10 shadow-[0_0_12px_rgba(255,255,255,0.05)]'
+        : 'text-slate-400 hover:text-white'
+    }`
 
   return (
-    <div className="min-h-dvh" style={{ background: 'var(--bg-gradient)' }}>
-      <Navbar onEnterApp={onEnterApp} showRegister={showRegister} />
+    <div className="luxe-landing min-h-screen font-sans selection:bg-white selection:text-black relative">
+      {/* Ambient background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden select-none z-0">
+        <div className="absolute -top-40 -left-40 w-[38rem] h-[38rem] bg-cyan-900/10 rounded-full blur-[140px]"></div>
+        <div className="absolute top-1/3 -right-48 w-[42rem] h-[42rem] bg-slate-600/5 rounded-full blur-[160px]"></div>
+        <div className="absolute inset-0 luxe-dotgrid"></div>
+      </div>
 
-      {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-5 pb-16 pt-20 text-center">
-        <FadeIn>
+      {/* Header */}
+      <header
+        className="relative z-20 w-full px-6 lg:px-16 py-7 flex items-center justify-between max-w-7xl mx-auto"
+        data-purpose="site-navigation-bar"
+      >
+        <div className="flex items-center space-x-3" data-purpose="brand-logo-container">
+          <button type="button" onClick={onEnterApp} className="group flex items-baseline gap-1 cursor-pointer">
+            <span className="font-serif text-3xl sm:text-4xl tracking-tight text-white font-medium group-hover:text-slate-200 transition-colors">
+              Treazury
+            </span>
+            <span className="w-1.5 h-1.5 rounded-full bg-icyCyan inline-block opacity-90 shadow-[0_0_8px_rgba(165,243,252,0.8)]"></span>
+          </button>
+          <span className="hidden sm:inline-block ml-3 pl-3 border-l border-white/10 text-[10px] font-mono tracking-widest text-slate-400 uppercase">
+            Private Liquidity
+          </span>
+        </div>
+        <nav
+          className="hidden md:flex items-center space-x-9 text-xs font-mono uppercase tracking-[0.2em] text-slate-400"
+          data-purpose="header-nav-links"
+        >
+          <a className="hover:text-white transition-colors duration-200" href="#caracteristicas">
+            Features
+          </a>
+          <a className="hover:text-white transition-colors duration-200" href="#whatsapp">
+            WhatsApp B2B
+          </a>
+          <a className="hover:text-white transition-colors duration-200" href="#calculadora">
+            Calculator
+          </a>
+          <a className="hover:text-white transition-colors duration-200" href="#tarifas">
+            Pricing
+          </a>
+        </nav>
+        <div className="flex items-center space-x-5" data-purpose="header-cta-group">
+          <button
+            type="button"
+            onClick={onEnterApp}
+            className="hidden sm:inline-block text-xs font-mono uppercase tracking-wider text-slate-300 hover:text-white transition-colors cursor-pointer"
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={onEnterApp}
+            className="relative group px-5 py-2.5 rounded-full text-xs font-mono tracking-wider text-white transition-all duration-300 border border-white/20 hover:border-white/50 bg-white/[0.04] hover:bg-white/[0.08] shadow-[0_0_15px_rgba(255,255,255,0.04)] hover:shadow-[0_0_20px_rgba(255,255,255,0.12)] cursor-pointer"
+          >
+            <span className="relative z-10 flex items-center gap-2">
+              Create Account <span className="text-icyCyan transition-transform group-hover:translate-x-0.5">→</span>
+            </span>
+          </button>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <main
+        className="relative z-10 max-w-7xl mx-auto px-6 lg:px-16 pt-8 pb-24 grid grid-cols-1 lg:grid-cols-12 gap-14 lg:gap-12 items-center"
+        data-purpose="hero-main-container"
+      >
+        {/* Left column */}
+        <section className="lg:col-span-6 flex flex-col items-start pr-0 lg:pr-6" data-purpose="hero-left-column">
           <div
-            className="mb-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest"
-            style={{
-              background: 'var(--surface-muted)',
-              color: 'var(--muted)',
-              border: '1px solid var(--border)',
-            }}
+            className="inline-flex items-center px-4 py-1.5 rounded-full border border-white/20 bg-white/[0.03] text-slate-200 font-mono text-[10px] sm:text-[11px] uppercase tracking-[0.22em] mb-8"
+            data-purpose="audience-badge"
           >
-            Para proveedores mayoristas
+            <span className="w-1.5 h-1.5 rounded-full bg-icyCyan mr-2.5 shadow-[0_0_6px_rgba(165,243,252,0.9)] animate-pulse"></span>
+            For Wholesale B2B Suppliers
           </div>
-        </FadeIn>
 
-        <FadeIn delay={0.06}>
-          <h1
-            className="display mx-auto mb-4 max-w-2xl text-4xl font-bold text-balance sm:text-5xl"
-            style={{ color: 'var(--ink)', letterSpacing: '-0.03em' }}
-          >
-            Cobra tus pedidos de WhatsApp en USDC
-          </h1>
-        </FadeIn>
+          <div className="relative w-full mb-7" data-purpose="headline-block">
+            <h1 className="text-4xl sm:text-6xl xl:text-[4.2rem] font-serif font-light leading-[1.08] tracking-tight text-white">
+              Collect your <br />
+              <span className="italic font-normal text-slate-100">WhatsApp orders</span> <br />
+              <span className="font-light tracking-normal bg-gradient-to-r from-white via-slate-200 to-cyan-200/90 bg-clip-text text-transparent">
+                in instant USDC.
+              </span>
+            </h1>
+            <div className="w-16 h-px bg-gradient-to-r from-cyan-400 to-transparent mt-6 opacity-60"></div>
+          </div>
 
-        <FadeIn delay={0.1}>
           <p
-            className="mx-auto mb-8 max-w-xl text-base leading-relaxed text-pretty"
-            style={{ color: 'var(--muted)' }}
+            className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-lg font-light tracking-wide mb-10"
+            data-purpose="hero-subtitle"
           >
-            PayStyle convierte tu operación B2B por WhatsApp en un flujo profesional: catálogo, pedidos, factura y cobro en un solo lugar. El dinero llega directo a tu wallet en segundos.
+            Treazury unifies high-ticket WhatsApp commerce with institutional crypto settlement. Seamless
+            cataloging, encrypted orders, and automated compliance—received directly into your wallet in seconds.
           </p>
-        </FadeIn>
 
-        <FadeIn delay={0.14}>
-          <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <div className="flex flex-wrap items-center gap-6 mb-11" data-purpose="cta-action-row">
             <button
+              type="button"
               onClick={onEnterApp}
-              onMouseEnter={() => setHoverCta(true)}
-              onMouseLeave={() => setHoverCta(false)}
-              className="flex items-center gap-2 rounded-2xl px-7 py-3.5 text-base font-semibold text-white transition-all"
-              style={{
-                background: hoverCta ? 'var(--accent-hover)' : 'var(--ink)',
-                boxShadow: hoverCta
-                  ? '0 8px 24px rgba(16,97,166,0.30)'
-                  : '0 4px 16px rgba(18,45,69,0.18)',
-              }}
+              className="group relative px-8 py-4 rounded-full bg-white text-black font-medium text-xs sm:text-sm tracking-wider uppercase font-mono transition-all duration-300 hover:bg-slate-100 shadow-[0_0_30px_rgba(255,255,255,0.25)] active:scale-95 flex items-center gap-3 cursor-pointer"
             >
-              {showRegister ? 'Crear cuenta gratis' : 'Entrar al panel'}
-              <ArrowRight size={16} strokeWidth={2.5} />
+              <span>{heroCtaLabel}</span>
+              <span className="text-slate-600 transition-transform group-hover:translate-x-1 group-hover:text-black">
+                →
+              </span>
             </button>
-            <span className="text-sm" style={{ color: 'var(--subtle)' }}>
-              Solo para Venezuela por ahora
-            </span>
-          </div>
-        </FadeIn>
-
-        {/* WhatsApp message mockup */}
-        <FadeIn delay={0.2}>
-          <div className="mx-auto mt-14 max-w-sm">
-            <div
-              className="rounded-2xl p-1.5"
-              style={{
-                background: 'var(--surface-strong)',
-                border: '1px solid var(--border)',
-                boxShadow: '0 8px 40px rgba(18,45,69,0.10)',
-              }}
-            >
-              {/* Chat header */}
-              <div
-                className="flex items-center gap-2 rounded-xl px-3 py-2"
-                style={{ background: '#128C7E' }}
-              >
-                <div className="h-7 w-7 rounded-full bg-white/20" />
-                <div>
-                  <p className="text-xs font-semibold text-white">Luis M. — Gomería El Norte</p>
-                  <p className="text-[10px] text-white/70">en línea</p>
-                </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="passport-stamp px-3 py-1.5 rounded bg-white/[0.02] border-white/20 flex items-center gap-2">
+                <span className="text-xs">🇦🇷</span>
+                <span className="text-[11px] font-mono text-slate-200 font-semibold tracking-widest">ARGENTINA</span>
+                <span className="text-[9px] font-mono text-icyCyan border border-cyan-400/40 px-1 py-0.5 rounded-sm bg-cyan-950/40 font-semibold">
+                  LIVE
+                </span>
               </div>
+              <div className="passport-stamp px-3 py-1.5 rounded bg-white/[0.01] border-white/10 opacity-60 flex items-center gap-2">
+                <span className="text-xs grayscale">🇻🇪</span>
+                <span className="text-[11px] font-mono text-slate-400 tracking-widest line-through">VENEZUELA</span>
+                <span className="text-[9px] font-mono text-slate-500 border border-slate-700 px-1 rounded-sm">Q3</span>
+              </div>
+              <a
+                className="text-[11px] font-mono text-slate-400 hover:text-white transition-colors tracking-wider underline decoration-white/20 underline-offset-4 flex items-center gap-1"
+                href="#request-country"
+              >
+                Request region →
+              </a>
+            </div>
+          </div>
 
-              {/* Messages */}
-              <div className="space-y-2 p-3">
-                {/* Incoming */}
-                <div className="flex justify-start">
-                  <div
-                    className="max-w-[85%] rounded-xl rounded-tl-sm px-3 py-2 text-xs"
-                    style={{ background: '#fff', border: '1px solid var(--border)' }}
-                  >
-                    <p style={{ color: 'var(--ink)' }}>
-                      Necesito 4 neumáticos 205/55 R16 y 2 de 185/65 R15
-                    </p>
-                    <p className="mt-0.5 text-right text-[10px]" style={{ color: 'var(--subtle)' }}>
-                      9:14
-                    </p>
-                  </div>
+          <div
+            id="tarifas"
+            className="flex flex-wrap items-center gap-6 pt-2 border-t border-white/10 w-full"
+            data-purpose="trust-metric-chips"
+          >
+            <div className="flex items-baseline space-x-2 font-mono">
+              <span className="text-lg font-light text-white">0.00%</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">Hidden Fees</span>
+            </div>
+            <div className="h-3 w-px bg-white/10"></div>
+            <div className="flex items-baseline space-x-2 font-mono">
+              <span className="text-lg font-light text-cyan-300">2.0s</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">Net Settlement</span>
+            </div>
+            <div className="h-3 w-px bg-white/10"></div>
+            <div className="flex items-baseline space-x-2 font-mono">
+              <span className="text-lg font-light text-slate-200">T+0</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">Instant Liquidity</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Right column — interactive showcase */}
+        <section
+          className="lg:col-span-6 relative w-full flex justify-center flex-col items-center"
+          data-purpose="hero-interactive-showcase"
+        >
+          <div
+            id="whatsapp"
+            className="w-full max-w-[500px] luxe-glass rounded-[2rem] p-6 sm:p-7 relative platinum-glow"
+            data-purpose="main-glassmorphic-card"
+          >
+            <div
+              className="w-full bg-black/40 p-1 rounded-full flex items-center justify-between mb-6 border border-white/10"
+              data-purpose="segmented-tab-switcher"
+            >
+              <button type="button" onClick={() => setTab('demo')} className={tabButton(tab === 'demo')}>
+                [Live Demo]
+              </button>
+              <button type="button" onClick={() => setTab('calc')} className={tabButton(tab === 'calc')}>
+                [Fee Calculator]
+              </button>
+            </div>
+
+            {tab === 'demo' ? (
+              <div className="space-y-4 transition-all duration-300" id="panel-demo">
+                <div className="flex items-center justify-between pb-1 text-xs font-mono">
+                  <span className="text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                    Haute Fintech Stream
+                  </span>
+                  <span className="text-[10px] text-slate-400 border border-white/10 px-2 py-0.5 rounded-full bg-white/[0.02]">
+                    HD Preview
+                  </span>
                 </div>
-
-                {/* Outgoing — payment link */}
-                <div className="flex justify-end">
-                  <div
-                    className="max-w-[88%] rounded-xl rounded-tr-sm px-3 py-2 text-xs"
-                    style={{ background: 'var(--ink)', color: 'white' }}
-                  >
-                    <p className="font-medium">Pedido #1042 — $347 USDC</p>
-                    <p className="mt-0.5 text-white/70 text-[11px]">
-                      4× 205/55 R16 Pirelli + 2× 185/65 R15
-                    </p>
-                    <div
-                      className="mt-2 rounded-lg px-3 py-1.5 text-center text-[11px] font-semibold"
-                      style={{ background: 'rgba(255,255,255,0.18)' }}
-                    >
-                      Pagar ahora
+                <div className="relative w-full rounded-2xl overflow-hidden border border-white/15 bg-black shadow-2xl group">
+                  <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-20 h-3.5 bg-black/90 backdrop-blur-md rounded-full border border-white/10 z-20 flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-slate-800 mr-2"></div>
+                    <div className="w-6 h-1 rounded-full bg-slate-800"></div>
+                  </div>
+                  <div className="relative w-full aspect-video bg-black overflow-hidden">
+                    <iframe
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      className="w-full h-full border-0 rounded-2xl opacity-90 group-hover:opacity-100 transition-opacity"
+                      src="https://www.youtube-nocookie.com/embed/ScMzIvxBSi4?rel=0&modestbranding=1"
+                      title="Treazury Demo Video"
+                    ></iframe>
+                  </div>
+                  <div className="p-3.5 bg-[#0a0c10]/95 border-t border-white/10 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs">
+                        💬
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-white tracking-wide">Order #8849 Confirmed</p>
+                        <p className="text-[10px] font-mono text-slate-400">Wholesale Textile Supply Ltd.</p>
+                      </div>
                     </div>
-                    <p className="mt-0.5 text-right text-[10px] text-white/50">
-                      9:15 ✓✓
-                    </p>
-                  </div>
-                </div>
-
-                {/* Incoming — confirmation */}
-                <div className="flex justify-start">
-                  <div
-                    className="max-w-[85%] rounded-xl rounded-tl-sm px-3 py-2 text-xs"
-                    style={{ background: '#fff', border: '1px solid var(--border)' }}
-                  >
-                    <p style={{ color: 'var(--success)', fontWeight: 600 }}>
-                      Pago enviado. Gracias!
-                    </p>
-                    <p className="mt-0.5 text-right text-[10px]" style={{ color: 'var(--subtle)' }}>
-                      9:16
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p className="mt-3 text-center text-xs" style={{ color: 'var(--subtle)' }}>
-              Así se ve para tu cliente
-            </p>
-          </div>
-        </FadeIn>
-      </section>
-
-      {/* ── Features ─────────────────────────────────────────────────── */}
-      <section
-        className="py-16"
-        style={{ background: 'var(--surface-muted)', borderTop: '1px solid var(--border)' }}
-      >
-        <div className="mx-auto max-w-5xl px-5">
-          <FadeIn>
-            <p
-              className="mb-2 text-center text-xs font-semibold uppercase tracking-widest"
-              style={{ color: 'var(--subtle)' }}
-            >
-              Todo lo que necesitas
-            </p>
-            <h2
-              className="display mb-10 text-center text-2xl font-bold sm:text-3xl"
-              style={{ color: 'var(--ink)', letterSpacing: '-0.03em' }}
-            >
-              Un solo sistema para vender como profesional
-            </h2>
-          </FadeIn>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f, i) => (
-              <FadeIn key={f.title} delay={i * 0.04}>
-                <FeatureCard {...f} />
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── How it works ─────────────────────────────────────────────── */}
-      <section className="py-16">
-        <div className="mx-auto max-w-5xl px-5">
-          <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
-            <div>
-              <FadeIn>
-                <p
-                  className="mb-2 text-xs font-semibold uppercase tracking-widest"
-                  style={{ color: 'var(--subtle)' }}
-                >
-                  Cómo funciona
-                </p>
-                <h2
-                  className="display mb-8 text-2xl font-bold sm:text-3xl"
-                  style={{ color: 'var(--ink)', letterSpacing: '-0.03em' }}
-                >
-                  Listo para cobrar en menos de 5 minutos
-                </h2>
-              </FadeIn>
-
-              {steps.map((step, i) => (
-                <FadeIn key={step.title} delay={i * 0.06}>
-                  <Step number={i + 1} {...step} />
-                </FadeIn>
-              ))}
-            </div>
-
-            {/* Benefits panel */}
-            <FadeIn delay={0.1}>
-              <div
-                className="rounded-2xl p-6"
-                style={{
-                  background: 'var(--surface-strong)',
-                  border: '1px solid var(--border)',
-                  backdropFilter: 'blur(8px)',
-                }}
-              >
-                <p
-                  className="display mb-5 text-lg font-bold"
-                  style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}
-                >
-                  Por qué PayStyle
-                </p>
-                <ul className="space-y-3">
-                  {benefits.map(b => (
-                    <li key={b} className="flex items-center gap-3">
-                      <CheckCircle
-                        size={17}
-                        strokeWidth={2.5}
-                        style={{ color: 'var(--success)', flexShrink: 0 }}
-                      />
-                      <span className="text-sm" style={{ color: 'var(--ink-2)' }}>
-                        {b}
+                    <div className="text-right">
+                      <p className="text-xs font-mono font-semibold text-cyan-300">+ $14,250.00 USDC</p>
+                      <span className="text-[9px] font-mono text-emerald-400 flex items-center justify-end gap-1">
+                        <span className="w-1 h-1 rounded-full bg-emerald-400"></span> Settled
                       </span>
-                    </li>
-                  ))}
-                </ul>
-
-                <div
-                  className="mt-6 rounded-xl p-4"
-                  style={{ background: 'var(--surface-muted)' }}
-                >
-                  <p
-                    className="mb-1 text-xs font-semibold uppercase tracking-widest"
-                    style={{ color: 'var(--subtle)' }}
-                  >
-                    Ruta del dinero
-                  </p>
-                  <p className="text-sm" style={{ color: 'var(--muted)' }}>
-                    Tu cliente transfiere USDC directamente a una dirección única de tu pedido. El pago se confirma onchain en segundos, sin intermediarios.
-                  </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </FadeIn>
+            ) : (
+              <div className="space-y-5 transition-all duration-300" id="panel-calc">
+                <div id="calculadora" className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-white tracking-wider uppercase font-semibold">Volume Settlement Model</span>
+                  <span className="text-[10px] text-icyCyan border border-cyan-400/30 px-2 py-0.5 rounded-full bg-cyan-950/40">
+                    TRC20 / Polygon / Arbitrum
+                  </span>
+                </div>
+                <div className="bg-black/50 p-5 rounded-2xl border border-white/10 space-y-4">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-slate-400 font-mono uppercase tracking-wider">Turnover Volume</span>
+                    <span className="text-lg font-mono font-bold text-white tracking-tight">
+                      {formatVolume(volume)}
+                    </span>
+                  </div>
+                  <input
+                    aria-label="Monthly volume in USDC"
+                    className="w-full h-1.5 rounded-lg cursor-pointer accent-cyan-300"
+                    min={MIN_VOLUME}
+                    max={MAX_VOLUME}
+                    step={1000}
+                    type="range"
+                    value={volume}
+                    onChange={e => setVolume(Number(e.target.value))}
+                  />
+                  <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <div className="text-xs text-slate-300 flex items-center gap-1.5 font-mono">
+                        <span className="text-slate-400">Savings vs Swift/Bank:</span>
+                        <span className="font-bold text-cyan-300">{formatSavings(volume)}</span>
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-400">
+                        Protocol Fee: <span className="text-white font-medium">0.35% USDC</span> (Cap $15)
+                      </div>
+                    </div>
+                    <div className="w-16 h-8 flex items-center justify-center">
+                      <svg
+                        className="w-full h-full text-cyan-400"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        viewBox="0 0 100 45"
+                      >
+                        <path d="M5,38 L30,28 L55,34 L85,10"></path>
+                        <polyline points="72,10 85,10 85,22"></polyline>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                  <span>Zero rolling reserves withheld.</span>
+                  <span className="text-slate-200">Full self-custodial flow</span>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      </section>
 
-      {/* ── Bottom CTA ───────────────────────────────────────────────── */}
-      <section
-        className="py-16 text-center"
-        style={{ borderTop: '1px solid var(--border)' }}
-      >
-        <div className="mx-auto max-w-xl px-5">
-          <FadeIn>
-            <h2
-              className="display mb-3 text-2xl font-bold sm:text-3xl"
-              style={{ color: 'var(--ink)', letterSpacing: '-0.03em' }}
-            >
-              Empieza a cobrar hoy
-            </h2>
-            <p
-              className="mb-8 text-sm leading-relaxed"
-              style={{ color: 'var(--muted)' }}
-            >
-              PayStyle está en acceso anticipado para proveedores venezolanos. Solicita tu acceso y te contactamos en 24 horas.
-            </p>
-          </FadeIn>
-          <FadeIn delay={0.06}>
-            <button
-              onClick={onEnterApp}
-              className="flex items-center gap-2 rounded-2xl px-7 py-3.5 text-base font-semibold text-white transition-all mx-auto"
-              style={{
-                background: 'var(--ink)',
-                boxShadow: '0 4px 16px rgba(18,45,69,0.18)',
-              }}
-              onMouseEnter={e =>
-                ((e.currentTarget).style.background =
-                  'var(--accent-hover)')
-              }
-              onMouseLeave={e =>
-                ((e.currentTarget).style.background = 'var(--ink)')
-              }
-            >
-              {showRegister ? 'Solicitar acceso' : 'Ir al panel'}
-              <ArrowRight size={16} strokeWidth={2.5} />
-            </button>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* ── Footer ───────────────────────────────────────────────────── */}
-      <footer
-        className="py-8 text-center text-xs"
-        style={{
-          color: 'var(--subtle)',
-          borderTop: '1px solid var(--border)',
-        }}
-      >
-        <div className="mx-auto flex max-w-5xl flex-col items-center gap-2 px-5 sm:flex-row sm:justify-between">
-          <div className="flex items-center gap-1.5">
-            <div
-              className="flex h-5 w-5 items-center justify-center rounded"
-              style={{ background: 'var(--ink)' }}
-            >
-              <MessageCircle size={11} color="white" />
+          {/* Partners strip */}
+          <div id="caracteristicas" className="w-full max-w-[500px] mt-8 pt-2" data-purpose="powered-by-ticker-section">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent flex-1"></div>
+              <span className="text-[10px] font-mono tracking-[0.3em] text-slate-400 uppercase flex items-center gap-2">
+                POWERED BY THE BEST
+              </span>
+              <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent flex-1"></div>
             </div>
-            <span className="font-semibold" style={{ color: 'var(--ink-2)' }}>
-              PayStyle
-            </span>
+            <div className="relative w-full overflow-hidden rounded-xl bg-black/30 border border-white/5 py-3 px-2 [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)]">
+              <div className="flex items-center justify-around gap-6 opacity-70 hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
+                  <svg className="w-3.5 h-3.5 fill-current text-white" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" fill="none" r="10" stroke="currentColor" strokeWidth="2"></circle>
+                    <path d="M12 6v12M8 10h8" stroke="currentColor" strokeLinecap="round" strokeWidth="2"></path>
+                  </svg>
+                  <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
+                    Circle (USDC)
+                  </span>
+                </div>
+                <span className="text-slate-600 text-xs select-none">•</span>
+                <div className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
+                  <svg
+                    className="w-3.5 h-3.5 text-slate-300"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
+                    Privy
+                  </span>
+                </div>
+                <span className="text-slate-600 text-xs select-none">•</span>
+                <div className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
+                  <svg
+                    className="w-3.5 h-3.5 text-slate-300"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                  </svg>
+                  <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
+                    Kapso
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <span>Pagos en USDC · Arc Testnet · Venezuela</span>
-          <span>Built on Circle</span>
-        </div>
-      </footer>
+        </section>
+      </main>
+
+      {/* Terms pill */}
+      {termsVisible && (
+        <aside
+          className="fixed bottom-6 left-6 right-6 md:left-auto md:right-8 md:max-w-xl z-50 transition-all duration-300"
+          data-purpose="terms-cookie-banner"
+        >
+          <div className="luxe-glass-pill rounded-full py-3 px-5 shadow-2xl flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-icyCyan animate-pulse"></div>
+              <p className="text-xs text-slate-300 font-light leading-none">
+                By using Treazury, you agree to our{' '}
+                <a className="text-white underline decoration-white/40 hover:decoration-white font-medium" href="#terms">
+                  Terms
+                </a>{' '}
+                &{' '}
+                <a
+                  className="text-white underline decoration-white/40 hover:decoration-white font-medium"
+                  href="#privacy"
+                >
+                  Privacy
+                </a>
+                .
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setTermsVisible(false)}
+                className="px-3.5 py-1.5 rounded-full text-[11px] font-mono tracking-wider text-black bg-white hover:bg-slate-200 transition-all cursor-pointer font-medium"
+              >
+                Acknowledge
+              </button>
+              <button
+                type="button"
+                aria-label="Dismiss terms banner"
+                onClick={() => setTermsVisible(false)}
+                className="text-slate-400 hover:text-white text-xs transition-colors cursor-pointer px-1"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
     </div>
   )
 }
