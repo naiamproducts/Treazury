@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
     "deploy:self": "bun run ./scripts/self-deploy.ts",
     "compass:deploy": "bun run ./scripts/compass-deploy.ts",
     "fetch:abi": "bun run ./scripts/fetch-abi.ts",
@@ -23,6 +25,8 @@
     "@circle-fin/user-controlled-wallets": "^10.8.0",
     "@circle-fin/w3s-pw-web-sdk": "^1.1.11",
     "@openzeppelin/contracts": "5.1.0",
+    "@privy-io/react-auth": "^3.48.1",
+    "@solana-program/memo": "0.10.0",
     "@supabase/supabase-js": "^2.117.3",
     "@tanstack/react-query": "^5.62.7",
     "@web3icons/react": "^4.0.0",
@@ -42,6 +46,7 @@
     "viem": "^2.56.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/node": "^24.0.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
