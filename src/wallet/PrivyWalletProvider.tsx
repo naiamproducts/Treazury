@@ -65,6 +65,10 @@ import { isEvmAddress, isSolanaAddress } from './chains'
 
 const MAX_WALLET_ATTEMPTS = 4
 const WALLET_RETRY_DELAYS_MS = [1000, 2000, 4000]
+// Creation hang guard: an external createWallet() call that never settles
+// must not block the dashboard forever — it falls into the normal error path
+// below (bounded retry, then manual retry) instead.
+const CREATE_WALLET_TIMEOUT_MS = 30_000
 
 // ── Linked-account selection ─────────────────────────────────────────────
 
@@ -185,11 +189,10 @@ function PrivyJwtSync({ children, onAuthError }: { children: React.ReactNode; on
   }, [onAuthError])
 
   // Supported v3 path (config.customAuth is deprecated): Privy exchanges the
-  // SyncJwtBasedAuthState hook returns its flow status: surface real exchange
-  // failures instead of leaving wallet creation waiting on a session that
-  // never arrives.
-  // Supabase JWT for its own session. The hook re-syncs whenever the flags
-  // change, so no manual subscription is needed. Privy login is never called.
+  // Supabase JWT for its own session and re-syncs whenever the flags change,
+  // so no manual subscription is needed. Privy login is never called. The
+  // hook reports its flow status, so real exchange failures surface instead
+  // of leaving wallet creation waiting on a session that never arrives.
   const { state: jwtState } = useSubscribeToJwtAuthWithFlag({
     isAuthenticated: flags.isAuthenticated,
     isLoading: flags.isLoading,
@@ -206,8 +209,6 @@ function PrivyJwtSync({ children, onAuthError }: { children: React.ReactNode; on
 
   return <>{children}</>
 }
-
-// ── Embedded EVM wallet ensure ─────────────────────────────────────────────
 
 // ── Embedded wallet ensure (one instance per chain) ────────────────────────
 
@@ -281,7 +282,15 @@ function useEnsureChainWallet(args: {
       walletAttempts.current = { userId, count: attempts + 1 }
       setEnsuring(true)
       setWalletError(null)
-      void createAddress().then(
+      void Promise.race([
+        createAddress(),
+        new Promise<string>((_, reject) => {
+          window.setTimeout(
+            () => reject(new Error(`${chainLabel} wallet creation timed out.`)),
+            CREATE_WALLET_TIMEOUT_MS,
+          )
+        }),
+      ]).then(
         (created) => {
           if (!cancelled) setAddress(created)
         },
@@ -298,7 +307,7 @@ function useEnsureChainWallet(args: {
             }
             retryTimeout.current = window.setTimeout(() => {
               if (!cancelled) setRetryToken((token) => token + 1)
-            }, WALLET_RETRY_DELAYS_MS[Math.min(attemptsForUser, WALLET_RETRY_DELAYS_MS.length - 1)])
+            }, WALLET_RETRY_DELAYS_MS[Math.min(Math.max(attemptsForUser - 1, 0), WALLET_RETRY_DELAYS_MS.length - 1)])
             return
           }
           const detail = err instanceof Error && err.message.trim() ? `: ${err.message}` : ''

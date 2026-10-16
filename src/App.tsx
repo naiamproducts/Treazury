@@ -26,6 +26,7 @@ import ChargesView from './components/dashboard/ChargesView'
 import SettingsView from './components/dashboard/SettingsView'
 import { useDashboardStore } from './store'
 import { supabase } from './lib/supabase'
+import { toast } from 'sonner'
 
 type Stage = 'landing' | 'auth'
 
@@ -44,7 +45,12 @@ export default function App() {
   const { isConnected: storeConnected, connect: storeConnect, updateConfig: storeUpdateConfig } = store
   const [stage, setStage] = useState<Stage>('landing')
   // Tenant payout address already persisted, so the first link below runs once.
-  const persistedWalletRef = useRef<string | null>(null)
+  // Keyed by tenant + address so a user/tenant switch without remount never
+  // suppresses the new tenant's persist or writes against the wrong tenant.
+  const persistedWalletRef = useRef<{ tenantId: string; address: string } | null>(null)
+  // Payout-alert registration already completed, keyed the same way so a
+  // failure retries on a later session instead of being forgotten.
+  const registeredPayoutRef = useRef<{ tenantId: string; address: string } | null>(null)
 
   // ── Local payout address ─────────────────────────────────────────────
   // The tenant's stored wallet wins; otherwise the linked embedded EVM
@@ -82,37 +88,55 @@ export default function App() {
     if (auth.status !== 'authenticated') return
     if (!merchantWallet.configured || !merchantWallet.ready) return
     if ((auth.tenant.merchant_wallet_address ?? '').trim()) return
+    const tenantId = auth.tenant.id
     const evm = merchantWallet.evmAddress
-    if (!evm || persistedWalletRef.current === evm) return
-    persistedWalletRef.current = evm
+    if (!evm) return
+    const seen = persistedWalletRef.current
+    if (seen && seen.tenantId === tenantId && seen.address === evm) return
+    persistedWalletRef.current = { tenantId, address: evm }
     void storeUpdateConfig({ merchantWallet: evm })
       .then(() => {
-        // Best-effort: register the payout address on the shared Alchemy
-        // webhook so verify-payment sees incoming transfers.
-        // functions.invoke attaches the user JWT automatically. A failure
-        // only warns — the link and the dashboard never block on it.
-        void supabase.functions
-          .invoke('register-payout-address', { body: { address: evm } })
-          .then(({ error }) => {
-            if (error) {
-              console.warn(
-                '[PayStyle] no se pudo registrar la wallet en las alertas de pago; los cobros siguen activos',
-                error,
-              )
-            }
-          })
-          .catch((invokeErr: unknown) => {
-            console.warn(
-              '[PayStyle] no se pudo registrar la wallet en las alertas de pago; los cobros siguen activos',
-              invokeErr,
-            )
-          })
+        // Refresh the auth-layer tenant so the stored payout address is
+        // visible without waiting for the next login.
+        void auth.refreshTenant().catch((refreshErr: unknown) => {
+          console.warn('[PayStyle] tenant refresh after wallet persist failed', refreshErr)
+        })
       })
       .catch((err: unknown) => {
         persistedWalletRef.current = null
         console.error('[PayStyle] no se pudo guardar la wallet de cobro en el tenant', err)
       })
   }, [auth, merchantWallet, storeUpdateConfig])
+
+  // ── Register the payout address for payment alerts (best-effort) ─────────
+  // Runs as its own effect so a failed registration retries on a later
+  // session instead of being forgotten after the persist above runs once.
+  // check-payment reconciles on its own and never depends on this webhook,
+  // so a failure only shows a notice and never blocks the link or dashboard.
+  useEffect(() => {
+    if (auth.status !== 'authenticated') return
+    if (!merchantWallet.configured || !merchantWallet.ready) return
+    const tenantId = auth.tenant.id
+    const address = (auth.tenant.merchant_wallet_address ?? '').trim() || merchantWallet.evmAddress || ''
+    if (!address) return
+    const seen = registeredPayoutRef.current
+    if (seen && seen.tenantId === tenantId && seen.address === address) return
+    // functions.invoke attaches the user JWT automatically.
+    void supabase.functions
+      .invoke('register-payout-address', { body: { address } })
+      .then(({ error }) => {
+        if (error) {
+          console.warn('[PayStyle] payout alert registration failed; charges still work', error)
+          toast.warning('Payment alerts could not be enabled. Charges still work.')
+          return
+        }
+        registeredPayoutRef.current = { tenantId, address }
+      })
+      .catch((invokeErr: unknown) => {
+        console.warn('[PayStyle] payout alert registration failed; charges still work', invokeErr)
+        toast.warning('Payment alerts could not be enabled. Charges still work.')
+      })
+  }, [auth, merchantWallet])
 
   // ── Payment link (public, no auth needed) ──────────────────────────────
   if (isPaymentLink) {

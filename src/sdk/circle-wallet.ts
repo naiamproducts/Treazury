@@ -32,9 +32,15 @@ interface CircleWalletResponse {
 }
 
 async function invokeCircleWallet(action: CircleAction): Promise<string | null> {
-  const res = await supabase.functions.invoke('circle-wallet', {
-    body: { action },
-  })
+  let res: { error: unknown; data: unknown }
+  try {
+    res = await supabase.functions.invoke('circle-wallet', {
+      body: { action },
+    })
+  } catch (err: unknown) {
+    console.warn('[PayStyle] circle-wallet function failed', err)
+    return null
+  }
   if (res.error) {
     console.warn('[PayStyle] circle-wallet function failed', res.error)
     return null
