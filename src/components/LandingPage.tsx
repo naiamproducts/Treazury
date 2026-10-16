@@ -3,53 +3,25 @@
  *
  * React port of the Treazury design brief. CTA buttons call onEnterApp,
  * which routes into the app auth flow (App stage 'landing' -> 'auth').
- * Interactive bits (Demo/Calculator tabs, fee slider, terms pill) are
- * React state. The demo video is a youtube-nocookie placeholder iframe.
+ * The hero card hosts the access-request form (AccessRequestForm), which
+ * saves to Supabase. Copy claims only verified product capabilities:
+ * catalog with stock, orders, payment links/charges, multi-currency
+ * display, USDC settlement to the merchant wallet, approval-gated
+ * accounts.
  */
 
 import { useState } from 'react'
+import AccessRequestForm from './AccessRequestForm'
 
 interface LandingPageProps {
   onEnterApp: () => void
   showRegister: boolean
 }
 
-type Tab = 'demo' | 'calc'
-
-const MIN_VOLUME = 1000
-const MAX_VOLUME = 150000
-const DEFAULT_VOLUME = 25000
-// Benchmarks for the savings readout: TradFi/SWIFT-style 3.04% vs the
-// 0.35% protocol rate capped at $15.
-const BANK_RATE = 0.0304
-const PROTOCOL_RATE = 0.0035
-const PROTOCOL_CAP = 15
-
-function formatVolume(v: number): string {
-  return `$${v.toLocaleString('en-US')} USDC`
-}
-
-function formatSavings(volume: number): string {
-  const bankFee = volume * BANK_RATE
-  const protocolFee = Math.min(volume * PROTOCOL_RATE, PROTOCOL_CAP)
-  if (bankFee <= 0) return '+0.0%'
-  const savings = (1 - protocolFee / bankFee) * 100
-  return `+${savings.toFixed(1)}%`
-}
-
 export default function LandingPage({ onEnterApp, showRegister }: LandingPageProps) {
-  const [tab, setTab] = useState<Tab>('demo')
-  const [volume, setVolume] = useState(DEFAULT_VOLUME)
   const [termsVisible, setTermsVisible] = useState(true)
 
   const heroCtaLabel = showRegister ? 'Crear cuenta gratis' : 'Entrar al panel'
-
-  const tabButton = (active: boolean) =>
-    `w-1/2 py-2 px-4 text-xs font-mono tracking-wider rounded-full transition-all duration-300 ${
-      active
-        ? 'text-white bg-white/10 border border-white/10 shadow-[0_0_12px_rgba(255,255,255,0.05)]'
-        : 'text-slate-400 hover:text-white'
-    }`
 
   return (
     <div className="luxe-landing min-h-screen font-sans selection:bg-white selection:text-black relative">
@@ -80,17 +52,11 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
           className="hidden md:flex items-center space-x-9 text-xs font-mono uppercase tracking-[0.2em] text-slate-400"
           data-purpose="header-nav-links"
         >
-          <a className="hover:text-white transition-colors duration-200" href="#caracteristicas">
-            Funciones
+          <a className="hover:text-white transition-colors duration-200" href="#solicitar-acceso">
+            Solicitar acceso
           </a>
-          <a className="hover:text-white transition-colors duration-200" href="#whatsapp">
-            WhatsApp B2B
-          </a>
-          <a className="hover:text-white transition-colors duration-200" href="#calculadora">
-            Calculadora
-          </a>
-          <a className="hover:text-white transition-colors duration-200" href="#tarifas">
-            Tarifas
+          <a className="hover:text-white transition-colors duration-200" href="#regiones">
+            Regiones
           </a>
         </nav>
         <div className="flex items-center space-x-5" data-purpose="header-cta-group">
@@ -131,7 +97,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
           <div className="relative w-full mb-7" data-purpose="headline-block">
             <h1 className="text-4xl sm:text-6xl xl:text-[4.2rem] font-serif font-light leading-[1.08] tracking-tight text-white">
               Cobrá tus <br />
-              <span className="italic font-normal text-slate-100">pedidos de WhatsApp</span> <br />
+              <span className="italic font-normal text-slate-100">pedidos mayoristas</span> <br />
               <span className="font-light tracking-normal bg-gradient-to-r from-white via-slate-200 to-cyan-200/90 bg-clip-text text-transparent">
                 en USDC al instante.
               </span>
@@ -143,8 +109,9 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-lg font-light tracking-wide mb-10"
             data-purpose="hero-subtitle"
           >
-            Treazury une el comercio mayorista por WhatsApp con liquidación cripto institucional. Catálogo
-            simple, pedidos cifrados y cumplimiento automatizado — directo a tu wallet en segundos.
+            Treazury es tu panel mayorista: catálogo con stock, órdenes y links de pago en USDC que
+            liquidan directo a tu wallet. Precios en tu moneda local y cuentas activadas una por
+            una.
           </p>
 
           <div className="flex flex-wrap items-center gap-6 mb-11" data-purpose="cta-action-row">
@@ -158,7 +125,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                 →
               </span>
             </button>
-            <div className="flex flex-wrap items-center gap-3">
+            <div id="regiones" className="flex flex-wrap items-center gap-3 scroll-mt-24">
               <div className="passport-stamp px-3 py-1.5 rounded bg-white/[0.02] border-white/20 flex items-center gap-2">
                 <span className="text-xs">🇦🇷</span>
                 <span className="text-[11px] font-mono text-slate-200 font-semibold tracking-widest">ARGENTINA</span>
@@ -166,169 +133,54 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                   LIVE
                 </span>
               </div>
-              <div className="passport-stamp px-3 py-1.5 rounded bg-white/[0.01] border-white/10 opacity-60 flex items-center gap-2">
-                <span className="text-xs grayscale">🇻🇪</span>
-                <span className="text-[11px] font-mono text-slate-400 tracking-widest line-through">VENEZUELA</span>
-                <span className="text-[9px] font-mono text-slate-500 border border-slate-700 px-1 rounded-sm">Q3</span>
-              </div>
+              <span className="text-[11px] font-mono text-slate-500 tracking-wider">
+                VE · MX · CO · CL en camino
+              </span>
               <a
                 className="text-[11px] font-mono text-slate-400 hover:text-white transition-colors tracking-wider underline decoration-white/20 underline-offset-4 flex items-center gap-1"
-                href="#request-country"
+                href="#solicitar-acceso"
               >
-                Solicitar región →
+                Solicitar acceso →
               </a>
             </div>
           </div>
 
           <div
-            id="tarifas"
             className="flex flex-wrap items-center gap-6 pt-2 border-t border-white/10 w-full"
             data-purpose="trust-metric-chips"
           >
             <div className="flex items-baseline space-x-2 font-mono">
-              <span className="text-lg font-light text-white">0.00%</span>
-              <span className="text-[11px] uppercase tracking-wider text-slate-400">Comisiones ocultas</span>
+              <span className="text-lg font-light text-white">100%</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">Autocustodia</span>
             </div>
             <div className="h-3 w-px bg-white/10"></div>
             <div className="flex items-baseline space-x-2 font-mono">
-              <span className="text-lg font-light text-cyan-300">2.0s</span>
-              <span className="text-[11px] uppercase tracking-wider text-slate-400">Liquidación neta</span>
+              <span className="text-lg font-light text-cyan-300">USDC</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">Directo a tu wallet</span>
             </div>
             <div className="h-3 w-px bg-white/10"></div>
             <div className="flex items-baseline space-x-2 font-mono">
-              <span className="text-lg font-light text-slate-200">T+0</span>
-              <span className="text-[11px] uppercase tracking-wider text-slate-400">Liquidez inmediata</span>
+              <span className="text-lg font-light text-slate-200">5</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">Monedas locales</span>
             </div>
           </div>
         </section>
 
-        {/* Right column — interactive showcase */}
+        {/* Right column — access request */}
         <section
           className="lg:col-span-6 relative w-full flex justify-center flex-col items-center"
-          data-purpose="hero-interactive-showcase"
+          data-purpose="hero-access-request"
         >
           <div
-            id="whatsapp"
-            className="w-full max-w-[500px] luxe-glass rounded-[2rem] p-6 sm:p-7 relative platinum-glow"
+            id="solicitar-acceso"
+            className="w-full max-w-[500px] luxe-glass rounded-[2rem] p-6 sm:p-7 relative platinum-glow scroll-mt-24"
             data-purpose="main-glassmorphic-card"
           >
-            <div
-              className="w-full bg-black/40 p-1 rounded-full flex items-center justify-between mb-6 border border-white/10"
-              data-purpose="segmented-tab-switcher"
-            >
-              <button type="button" onClick={() => setTab('demo')} className={tabButton(tab === 'demo')}>
-                [Demo en vivo]
-              </button>
-              <button type="button" onClick={() => setTab('calc')} className={tabButton(tab === 'calc')}>
-                [Calculadora de comisiones]
-              </button>
-            </div>
-
-            {tab === 'demo' ? (
-              <div className="space-y-4 transition-all duration-300" id="panel-demo">
-                <div className="flex items-center justify-between pb-1 text-xs font-mono">
-                  <span className="text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                    Flujo fintech en vivo
-                  </span>
-                  <span className="text-[10px] text-slate-400 border border-white/10 px-2 py-0.5 rounded-full bg-white/[0.02]">
-                    Vista previa HD
-                  </span>
-                </div>
-                <div className="relative w-full rounded-2xl overflow-hidden border border-white/15 bg-black shadow-2xl group">
-                  <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-20 h-3.5 bg-black/90 backdrop-blur-md rounded-full border border-white/10 z-20 flex items-center justify-center">
-                    <div className="w-2 h-2 rounded-full bg-slate-800 mr-2"></div>
-                    <div className="w-6 h-1 rounded-full bg-slate-800"></div>
-                  </div>
-                  <div className="relative w-full aspect-video bg-black overflow-hidden">
-                    <iframe
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      allowFullScreen
-                      className="w-full h-full border-0 rounded-2xl opacity-90 group-hover:opacity-100 transition-opacity"
-                      src="https://www.youtube-nocookie.com/embed/ScMzIvxBSi4?rel=0&modestbranding=1"
-                      title="Video demo de Treazury"
-                    ></iframe>
-                  </div>
-                  <div className="p-3.5 bg-graphite/95 border-t border-white/10 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs">
-                        💬
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-white tracking-wide">Pedido #8849 confirmado</p>
-                        <p className="text-[10px] font-mono text-slate-400">Wholesale Textile Supply Ltd.</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs font-mono font-semibold text-cyan-300">+ $14,250.00 USDC</p>
-                      <span className="text-[9px] font-mono text-emerald-400 flex items-center justify-end gap-1">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400"></span> Liquidado
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-5 transition-all duration-300" id="panel-calc">
-                <div id="calculadora" className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-white tracking-wider uppercase font-semibold">Modelo de liquidación por volumen</span>
-                  <span className="text-[10px] text-icyCyan border border-cyan-400/30 px-2 py-0.5 rounded-full bg-cyan-950/40">
-                    TRC20 / Polygon / Arbitrum
-                  </span>
-                </div>
-                <div className="bg-black/50 p-5 rounded-2xl border border-white/10 space-y-4">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-xs text-slate-400 font-mono uppercase tracking-wider">Volumen operado</span>
-                    <span className="text-lg font-mono font-bold text-white tracking-tight">
-                      {formatVolume(volume)}
-                    </span>
-                  </div>
-                  <input
-                    aria-label="Volumen mensual en USDC"
-                    className="w-full h-1.5 rounded-lg cursor-pointer accent-cyan-300"
-                    min={MIN_VOLUME}
-                    max={MAX_VOLUME}
-                    step={1000}
-                    type="range"
-                    value={volume}
-                    onChange={e => setVolume(Number(e.target.value))}
-                  />
-                  <div className="pt-3 border-t border-white/10 flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="text-xs text-slate-300 flex items-center gap-1.5 font-mono">
-                        <span className="text-slate-400">Ahorro vs SWIFT/banco:</span>
-                        <span className="font-bold text-cyan-300">{formatSavings(volume)}</span>
-                      </div>
-                      <div className="text-[11px] font-mono text-slate-400">
-                        Comisión de protocolo: <span className="text-white font-medium">0.35% USDC</span> (Tope $15)
-                      </div>
-                    </div>
-                    <div className="w-16 h-8 flex items-center justify-center">
-                      <svg
-                        className="w-full h-full text-cyan-400"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        viewBox="0 0 100 45"
-                      >
-                        <path d="M5,38 L30,28 L55,34 L85,10"></path>
-                        <polyline points="72,10 85,10 85,22"></polyline>
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-[11px] font-mono text-slate-400">
-                  <span>Sin reservas retenidas.</span>
-                  <span className="text-slate-200">Flujo 100% autocustodiado</span>
-                </div>
-              </div>
-            )}
+            <AccessRequestForm onEnterApp={onEnterApp} />
           </div>
 
           {/* Partners strip */}
-          <div id="caracteristicas" className="w-full max-w-[500px] mt-8 pt-2" data-purpose="powered-by-ticker-section">
+          <div className="w-full max-w-[500px] mt-8 pt-2" data-purpose="powered-by-ticker-section">
             <div className="flex items-center justify-center gap-3 mb-4">
               <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent flex-1"></div>
               <span className="text-[10px] font-mono tracking-[0.3em] text-slate-400 uppercase flex items-center gap-2">
@@ -363,24 +215,6 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                   </svg>
                   <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
                     Privy
-                  </span>
-                </div>
-                <span className="text-slate-600 text-xs select-none">•</span>
-                <div className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
-                  <svg
-                    className="w-3.5 h-3.5 text-slate-300"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                    <polyline points="22,6 12,13 2,6"></polyline>
-                  </svg>
-                  <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
-                    Kapso
                   </span>
                 </div>
               </div>

@@ -180,6 +180,17 @@ export type Invoice = {
   xml_url: string | null
 }
 
+export type AccessRequest = {
+  id: string
+  created_at: string
+  name: string
+  business_name: string
+  email: string
+  country: string
+  monthly_volume_range: string
+  message: string | null
+}
+
 // Supabase generic Database type shape (used by createClient<Database>)
 export type Database = {
   public: {
@@ -193,6 +204,7 @@ export type Database = {
       charges: { Row: Charge; Insert: Partial<Charge>; Update: Partial<Charge>; Relationships: [] }
       payments: { Row: Payment; Insert: Partial<Payment>; Update: Partial<Payment>; Relationships: [] }
       invoices: { Row: Invoice; Insert: Partial<Invoice>; Update: Partial<Invoice>; Relationships: [] }
+      access_requests: { Row: AccessRequest; Insert: Partial<AccessRequest>; Update: Partial<AccessRequest>; Relationships: [] }
     }
     Views: Record<string, never>
     Functions: {

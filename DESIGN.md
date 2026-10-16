@@ -102,7 +102,7 @@ Rules:
 ## 4. Usage Rules
 
 - `.luxe-glass` — frosted dark card for hero content inside `.luxe-landing`
-  (e.g. the LandingPage interactive showcase card, the AuthPage form card,
+  (e.g. the LandingPage access-request card, the AuthPage form card,
   the PaymentPage charge card and invalid-link/paid receipts, the
   PendingApproval card) and for the self-scoped `CountrySetupModal` card.
 - `.luxe-glass-pill` — frosted dark pill for floating banners inside
@@ -121,8 +121,9 @@ Rules:
   `linear-gradient(90deg,#6366f1,…)` strip definitions.
 - Range-slider styling is owned by `src/index.css` under the
   `.luxe-landing input[type='range']` scope (webkit + moz track/thumb). No other
-  file may define slider styles; the only slider lives in the LandingPage fee
-  calculator.
+  file may define slider styles. No landing surface currently renders a
+  slider (the fee calculator was removed 2026-10-16); a future slider must
+  reuse this scope.
 - Fonts: use Tailwind classes (`font-sans`, `font-serif`, `font-mono`) so the
   resolved family always follows `tailwind.config.js`. Legacy `.display`
   (Space Grotesk) and `.mono` (JetBrains Mono) helpers in `index.css` are
