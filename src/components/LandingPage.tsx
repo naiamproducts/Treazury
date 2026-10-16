@@ -44,21 +44,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             </span>
             <span className="w-1.5 h-1.5 rounded-full bg-icyCyan inline-block opacity-90 shadow-[0_0_8px_rgba(165,243,252,0.8)]"></span>
           </button>
-          <span className="hidden sm:inline-block ml-3 pl-3 border-l border-white/10 text-[10px] font-mono tracking-widest text-slate-400 uppercase">
-            Liquidez privada
-          </span>
         </div>
-        <nav
-          className="hidden md:flex items-center space-x-9 text-xs font-mono uppercase tracking-[0.2em] text-slate-400"
-          data-purpose="header-nav-links"
-        >
-          <a className="hover:text-white transition-colors duration-200" href="#solicitar-acceso">
-            Solicitar acceso
-          </a>
-          <a className="hover:text-white transition-colors duration-200" href="#regiones">
-            Regiones
-          </a>
-        </nav>
         <div className="flex items-center space-x-5" data-purpose="header-cta-group">
           <button
             type="button"
