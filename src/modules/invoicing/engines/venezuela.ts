@@ -44,6 +44,8 @@ export class VenezuelaInvoiceEngine implements InvoiceEngine {
   readonly taxIdPlaceholder = 'J-12345678-9'
   readonly taxIdExample = 'J-12345678-9'
 
+  readonly addressPlaceholder = 'Av. Principal, Edificio, Piso, Caracas'
+
   readonly buyerTaxIdLabel = 'RIF'
   readonly buyerTaxIdPlaceholder = 'J-12345678-9'
   readonly buyerTaxIdExample = 'J-12345678-9 o V-12345678-0'

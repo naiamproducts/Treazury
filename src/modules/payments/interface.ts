@@ -73,6 +73,18 @@ export interface CreateChargeParams {
   recipientRef: string
   /** How long the link is valid, in seconds. Provider may ignore if unsupported. */
   ttlSeconds?: number
+  /**
+   * Display currency for the payment page (e.g. 'ARS'). The buyer can view
+   * the total in this currency; settlement is ALWAYS the charge `currency`
+   * (USDC). Display-only, never touches reconciliation.
+   */
+  displayCurrency?: string
+  /** Merchant business name shown on the payment page header. */
+  merchantName?: string
+  /** Merchant bank details for the transfer option (all display-only). */
+  bankName?: string
+  bankAlias?: string
+  bankAccount?: string
   /** Original order for contextual metadata. */
   order?: Order
   /** Additional provider-specific params. */

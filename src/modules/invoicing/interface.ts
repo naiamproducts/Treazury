@@ -149,6 +149,12 @@ export interface InvoiceEngine {
   readonly taxIdExample: string
 
   /**
+   * Placeholder text for the fiscal address input. Optional — defaults to
+   * generic text if not provided by the engine.
+   */
+  readonly addressPlaceholder?: string
+
+  /**
    * Buyer fiscal-ID metadata. Often the same document as the issuer's (VE:
    * RIF), but some countries distinguish them (AR: a buyer may identify with
    * DNI while the issuer uses CUIT), so buyer and issuer metadata stay

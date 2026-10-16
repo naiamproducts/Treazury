@@ -735,6 +735,29 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     void load()
   }, [tenantId, load])
 
+  // Pago en vivo sin recarga manual: verify-payment marca charges como paid
+  // fuera de esta pestaña, así que ante cualquier cambio en charges u orders
+  // del tenant se recarga (la misma lectura inicial, sin patrones nuevos).
+  // Si Realtime no está habilitado para estas tablas, el comercio sigue
+  // viendo el pago con el botón de actualizar (store.refresh).
+  useEffect(() => {
+    if (!tenantId) return
+    const channel = supabase
+      .channel(`paystyle-tenant-${tenantId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'charges', filter: `tenant_id=eq.${tenantId}` },
+        () => { void load() },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${tenantId}` },
+        () => { void load() },
+      )
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [tenantId, load])
+
   const refresh = useCallback(async (): Promise<void> => {
     await load()
   }, [load])
@@ -928,6 +951,18 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     setCustomers(prev => insertCustomerSorted(prev, created))
     return created
   }, [requireTenant, customers, updateCustomer])
+
+  const deleteCustomer = useCallback(async (id: string): Promise<void> => {
+    const { data, error } = await supabase
+      .from('contacts')
+      .update({ is_active: false })
+      .eq('id', id)
+      .select('id')
+    if (error) throw toStoreError(error, 'contacts')
+    if (!data || data.length === 0) throw new StoreError('not_found', 'El cliente ya no existe.')
+
+    setCustomers(prev => prev.filter(c => c.id !== id))
+  }, [])
 
   // ── Orders ─────────────────────────────────────────────────────────────
 
@@ -1124,6 +1159,58 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     return updated
   }, [requireTenant, config.applyIgtf])
 
+  // ── Manual payment mark ──────────────────────────────────────────────────
+  // The merchant confirms receipt (alias, transfer, cash, etc.) and flips
+  // the charge + order to paid without an on-chain tx. RLS allows the
+  // tenant owner to update their own charges, so no edge function is
+  // needed. paid_by is not a column yet — paid_at is the audit trail.
+  const markChargePaid = useCallback(async (orderId: string): Promise<Order> => {
+    const currentTenant = requireTenant()
+
+    // Read the active charge for this order
+    const { data: charges, error: chargeErr } = await supabase
+      .from('charges')
+      .select('*')
+      .eq('order_id', orderId)
+      .in('status', ['pending', 'partial'])
+    if (chargeErr) throw toStoreError(chargeErr, 'charges')
+
+    const charge = pickChargeForOrder(charges)
+    if (!charge) {
+      throw new StoreError('not_found', 'No hay un cobro activo para esta orden.')
+    }
+
+    // Update charge → paid
+    const now = new Date().toISOString()
+    const { error: updateChargeErr } = await supabase
+      .from('charges')
+      .update({ status: 'paid', paid_at: now, updated_at: now })
+      .eq('id', charge.id)
+      .eq('tenant_id', currentTenant)
+    if (updateChargeErr) throw toStoreError(updateChargeErr, 'charges')
+
+    // Update order → paid
+    const { data: orderRow, error: orderErr } = await supabase
+      .from('orders')
+      .update({ status: 'paid', updated_at: now })
+      .eq('id', orderId)
+      .eq('tenant_id', currentTenant)
+      .select('*')
+      .single()
+    if (orderErr) throw toStoreError(orderErr, 'orders')
+
+    // Re-read the charge (now paid) and rebuild the store object
+    const { data: updatedCharges } = await supabase
+      .from('charges')
+      .select('*')
+      .eq('order_id', orderId)
+    const updatedCharge = pickChargeForOrder(updatedCharges ?? [])
+    const lines = await fetchLines(orderId)
+    const updated = orderRowToStore(orderRow, lines, updatedCharge)
+    setOrders(prev => prev.map(o => (o.id === orderId ? updated : o)))
+    return updated
+  }, [requireTenant])
+
   // ── Config ─────────────────────────────────────────────────────────────
 
   const updateConfig = useCallback(async (patch: Partial<BusinessConfig>): Promise<void> => {
@@ -1160,8 +1247,10 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     releaseStock,
     addOrder,
     updateOrder,
+    markChargePaid,
     addCustomer,
     updateCustomer,
+    deleteCustomer,
     updateConfig,
   }
 }

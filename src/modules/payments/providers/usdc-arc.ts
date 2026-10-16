@@ -43,9 +43,10 @@ const ARC_TESTNET_CHAIN_ID = 5042002
 const ARC_TESTNET_RPC = 'https://rpc.testnet.arc.io'
 const DEFAULT_TTL_SECONDS = 86_400   // 24 h
 
-// Deployed PaymentRouter on Arc Testnet
-// Matches the address in AGENTS.md
-const PAYMENT_ROUTER_ADDRESS = '0xb3a5646f7b864dca246437b18e35d23d4535d29b' as Address
+// Deployed PaymentRouter on Arc Testnet (redeployed Oct-2026: adds
+// deposit/depositWithPermit on OrderVault; also fixes usdcToken, which the
+// original deployment pointed at Ethereum mainnet USDC).
+const PAYMENT_ROUTER_ADDRESS = '0x83DF8E097F2f8A5e19a291eb45FEff3A69bBF802' as Address
 
 // Basis points for this deployment: 1% platform, 0.5% dev
 const PLATFORM_FEE_BPS = 100
@@ -275,6 +276,14 @@ export class USDCArcProvider implements PaymentProvider {
     url.searchParams.set('memo',     params.description)
     url.searchParams.set('chargeId', chargeId)
     url.searchParams.set('chainId',  String(this.cfg.chainId))
+    // Buyer display currency (settlement stays USDC — see interface docs).
+    if (params.displayCurrency) url.searchParams.set('display', params.displayCurrency)
+    // Merchant identity + bank details for the Linktree-style payment page.
+    // Display-only: reconciliation keys off chargeId/tx_hash, never these.
+    if (params.merchantName) url.searchParams.set('mname', params.merchantName)
+    if (params.bankName) url.searchParams.set('bname', params.bankName)
+    if (params.bankAlias) url.searchParams.set('balias', params.bankAlias)
+    if (params.bankAccount) url.searchParams.set('bacct', params.bankAccount)
     if (vaultAddress) url.searchParams.set('merchant', params.recipientRef)
 
     return {

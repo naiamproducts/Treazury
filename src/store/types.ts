@@ -196,7 +196,9 @@ export interface DashboardStore {
   releaseStock: (productId: string, variantId: string | undefined, qty: number) => Promise<void>
   addOrder: (o: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>, options?: AddOrderCustomerOptions) => Promise<Order>
   updateOrder: (id: string, patch: Partial<Order>) => Promise<Order>
+  markChargePaid: (orderId: string) => Promise<Order>
   addCustomer: (c: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Customer>
   updateCustomer: (id: string, patch: Partial<Customer>) => Promise<Customer>
+  deleteCustomer: (id: string) => Promise<void>
   updateConfig: (patch: Partial<BusinessConfig>) => Promise<void>
 }

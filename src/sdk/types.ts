@@ -6,12 +6,16 @@
  */
 
 export interface SDKConfig {
-  /** Circle Developer API Key  (VITE_CIRCLE_API_KEY) */
-  apiKey: string
-  /** Circle Entity Secret — 32-byte hex (VITE_CIRCLE_ENTITY_SECRET)
-   *  NOTE: In production this must live server-side only. For this PoC
-   *  it is exposed via the VITE_ prefix so the demo can run in the browser.
+  /**
+   * Circle Developer API Key — LEGACY, server-side only.
+   * Non-custodial is the default: merchants collect to their own address
+   * (Privy embedded wallet or BYOW) and the platform never signs. These
+   * fields stay so tenants created under the legacy Circle flow keep
+   * working through the `circle-wallet` Edge Function — they must NEVER
+   * be set from VITE_ env vars or any browser-bundled value.
    */
+  apiKey: string
+  /** Circle Entity Secret — LEGACY, server-side only (see apiKey). */
   entitySecret: string
   /** Chain ID to operate on. Defaults to Arc Testnet (5042002) */
   chainId?: number
