@@ -24,7 +24,7 @@ export type AuthState =
   | { status: 'authenticated'; user: User; tenant: Tenant; session: Session }
 
 export interface AuthActions {
-  signUp: (email: string, password: string, businessName: string) => Promise<{ error: string | null }>
+  signUp: (email: string, password: string, businessName: string, country?: string) => Promise<{ error: string | null }>
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshTenant: () => Promise<void>
@@ -100,12 +100,12 @@ export function useAuth(): AuthState & AuthActions {
     return () => subscription.unsubscribe()
   }, [loadTenant])
 
-  const signUp = useCallback(async (email: string, password: string, businessName: string) => {
+  const signUp = useCallback(async (email: string, password: string, businessName: string, country?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { business_name: businessName },
+        data: { business_name: businessName, country: country ?? 'VE' },
       },
     })
     if (error) return { error: error.message }

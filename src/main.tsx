@@ -22,6 +22,7 @@ import { config } from './config'
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ConnectKitProviderWrapper } from './components/ConnectKitProviderWrapper'
+import { PrivyWalletProvider } from './wallet/PrivyWalletProvider'
 import './index.css'
 
 const queryClient = new QueryClient()
@@ -70,6 +71,7 @@ const StudioWatermark = () => (
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
+      <PrivyWalletProvider>
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           <ConnectKitProviderWrapper>
@@ -79,6 +81,7 @@ createRoot(document.getElementById('root')!).render(
           </ConnectKitProviderWrapper>
         </QueryClientProvider>
       </WagmiProvider>
+      </PrivyWalletProvider>
     </ErrorBoundary>
   </StrictMode>,
 )
