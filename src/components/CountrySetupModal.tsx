@@ -2,6 +2,10 @@
  * CountrySetupModal — shown once after first login when the tenant
  * has no country configured. Blocks until the merchant picks one.
  * Persisted via store.config.country + localStorage flag.
+ *
+ * Styled in the Treazury luxe-dark theme (luxe-glass card, dark option
+ * rows), matching the AuthPage form card. All dark styling is scoped to
+ * this modal's own classes — the light dashboard underneath is untouched.
  */
 
 import { useState } from 'react'
@@ -56,33 +60,25 @@ export default function CountrySetupModal({ store, tenantId }: CountrySetupModal
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: 'rgba(18,45,69,0.55)', backdropFilter: 'blur(6px)' }}
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 font-sans"
+          style={{ background: 'rgba(7,8,10,0.72)', backdropFilter: 'blur(8px)' }}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.94, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            className="w-full max-w-sm rounded-3xl p-6"
-            style={{
-              background: 'var(--surface-strong)',
-              border: '1px solid var(--border)',
-              boxShadow: '0 12px 48px rgba(18,45,69,0.22)',
-            }}
+            className="luxe-glass w-full max-w-sm rounded-[2rem] p-6 sm:p-8"
           >
             {/* Icon */}
-            <div
-              className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl"
-              style={{ background: 'var(--accent)' }}
-            >
-              <Globe className="size-6 text-white" />
+            <div className="luxe-glass mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl">
+              <Globe className="size-6 text-icyCyan" />
             </div>
 
-            <h2 className="display text-center text-xl font-bold" style={{ color: 'var(--ink)' }}>
+            <h2 className="text-center font-serif text-2xl font-medium text-white">
               ¿Dónde operás?
             </h2>
-            <p className="mt-1 text-center text-sm" style={{ color: 'var(--muted)' }}>
+            <p className="mt-1 text-center text-sm text-slate-400">
               Elegí tu país para configurar la moneda local y las preferencias fiscales.
             </p>
 
@@ -92,14 +88,11 @@ export default function CountrySetupModal({ store, tenantId }: CountrySetupModal
                 <button
                   key={c.code}
                   onClick={() => setSelected(c.code)}
-                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all"
-                  style={{
-                    background: selected === c.code ? 'var(--accent)' : 'var(--surface-muted)',
-                    color: selected === c.code ? '#fff' : 'var(--ink)',
-                    border: selected === c.code
-                      ? '1px solid var(--accent)'
-                      : '1px solid var(--border)',
-                  }}
+                  className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium transition-all ${
+                    selected === c.code
+                      ? 'border-cyan-300/50 bg-white/[0.08] text-white shadow-[0_0_16px_rgba(56,189,248,0.15)]'
+                      : 'border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06]'
+                  }`}
                 >
                   <span className="text-lg">{c.flag}</span>
                   <span>{c.name}</span>
@@ -111,8 +104,7 @@ export default function CountrySetupModal({ store, tenantId }: CountrySetupModal
             <button
               onClick={() => { void handleConfirm() }}
               disabled={saving}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition-all disabled:opacity-60"
-              style={{ background: 'var(--accent)' }}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 font-mono text-xs font-medium uppercase tracking-wider text-black transition-all hover:bg-slate-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 shadow-[0_0_30px_rgba(255,255,255,0.25)]"
             >
               {saving
                 ? <><Loader2 className="size-4 animate-spin" /> Guardando…</>

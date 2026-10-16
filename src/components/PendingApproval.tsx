@@ -7,6 +7,9 @@
  *
  * Country is saved directly via Supabase (the tenant owner can UPDATE
  * their own row under RLS even while is_approved=false).
+ *
+ * Styled in the Treazury luxe-dark theme (scoped to .luxe-landing),
+ * matching the AuthPage form card.
  */
 
 import { useState } from 'react'
@@ -80,32 +83,26 @@ export default function PendingApproval({
   }
 
   return (
-    <div
-      className="flex min-h-dvh flex-col items-center justify-center px-4 py-8"
-      style={{ background: 'var(--bg-gradient)' }}
-    >
-      <div
-        className="w-full max-w-sm rounded-3xl p-8 text-center"
-        style={{
-          background: 'var(--surface-strong)',
-          border: '1px solid var(--border)',
-          boxShadow: '0 4px 32px rgba(18,45,69,0.08)',
-        }}
-      >
-        <div
-          className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl"
-          style={{ background: 'var(--accent)' }}
-        >
-          <MessageSquare className="size-7 text-white" />
+    <div className="luxe-landing relative flex min-h-dvh flex-col items-center justify-center px-4 py-8 font-sans">
+      {/* Ambient background */}
+      <div className="pointer-events-none fixed inset-0 select-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 h-[38rem] w-[38rem] rounded-full bg-cyan-900/10 blur-[140px]"></div>
+        <div className="absolute top-1/3 -right-48 h-[42rem] w-[42rem] rounded-full bg-slate-600/5 blur-[160px]"></div>
+        <div className="luxe-dotgrid absolute inset-0"></div>
+      </div>
+
+      <div className="luxe-glass relative z-10 w-full max-w-sm rounded-[2rem] p-6 text-center sm:p-8">
+        <div className="luxe-glass mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl">
+          <MessageSquare className="size-7 text-icyCyan" />
         </div>
 
         {step === 'country' ? (
           <>
             {/* ── Step 1: Country selection ── */}
-            <h1 className="display text-xl font-bold" style={{ color: 'var(--ink)' }}>
+            <h1 className="font-serif text-2xl font-medium text-white">
               ¿Dónde operás?
             </h1>
-            <p className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>
+            <p className="mt-2 text-sm text-slate-400">
               Elegí tu país para configurar la moneda local y las preferencias fiscales.
             </p>
 
@@ -114,18 +111,15 @@ export default function PendingApproval({
                 <button
                   key={c.code}
                   onClick={() => setSelected(c.code)}
-                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all"
-                  style={{
-                    background: selected === c.code ? 'var(--accent)' : 'var(--surface-muted)',
-                    color: selected === c.code ? '#fff' : 'var(--ink)',
-                    border: selected === c.code
-                      ? '1px solid var(--accent)'
-                      : '1px solid var(--border)',
-                  }}
+                  className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium transition-all ${
+                    selected === c.code
+                      ? 'border-cyan-300/50 bg-white/[0.08] text-white shadow-[0_0_16px_rgba(56,189,248,0.15)]'
+                      : 'border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06]'
+                  }`}
                 >
                   <span className="text-lg">{c.flag}</span>
                   <span>{c.name}</span>
-                  <span className="ml-auto text-xs opacity-70">
+                  <span className={`ml-auto font-mono text-xs ${selected === c.code ? 'text-icyCyan' : 'text-slate-500'}`}>
                     {currencyForCountry(c.code)}
                   </span>
                 </button>
@@ -133,14 +127,13 @@ export default function PendingApproval({
             </div>
 
             {saveError && (
-              <p className="mt-3 text-xs" style={{ color: 'var(--danger)' }}>{saveError}</p>
+              <p className="mt-3 text-xs text-red-300">{saveError}</p>
             )}
 
             <button
               onClick={() => { void handleCountryConfirm() }}
               disabled={saving}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition-all disabled:opacity-60"
-              style={{ background: 'var(--accent)' }}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 font-mono text-xs font-medium uppercase tracking-wider text-black transition-all hover:bg-slate-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 shadow-[0_0_30px_rgba(255,255,255,0.25)]"
             >
               {saving
                 ? <><Loader2 className="size-4 animate-spin" /> Guardando…</>
@@ -151,37 +144,31 @@ export default function PendingApproval({
         ) : (
           <>
             {/* ── Step 2: Pending approval ── */}
-            <h1 className="display text-xl font-bold" style={{ color: 'var(--ink)' }}>
+            <h1 className="font-serif text-2xl font-medium text-white">
               Solicitud recibida
             </h1>
 
-            <div
-              className="mx-auto mt-4 flex items-center gap-2 rounded-xl px-4 py-3"
-              style={{ background: 'rgba(255,180,0,0.08)', border: '1px solid rgba(255,180,0,0.2)' }}
-            >
-              <Clock className="size-4 shrink-0" style={{ color: '#b45309' }} />
-              <p className="text-sm" style={{ color: '#92400e' }}>
+            <div className="mx-auto mt-4 flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3">
+              <Clock className="size-4 shrink-0 text-amber-300" />
+              <p className="text-sm text-amber-200">
                 Pendiente de aprobación
               </p>
             </div>
 
-            <p className="mt-4 text-sm" style={{ color: 'var(--ink-2)' }}>
-              Tu solicitud para <strong>{businessName}</strong> fue recibida.
-              Recibirás un correo en <strong>{email}</strong> cuando tu cuenta sea activada.
+            <p className="mt-4 text-sm text-slate-300">
+              Tu solicitud para <strong className="text-white">{businessName}</strong> fue recibida.
+              Recibirás un correo en <strong className="text-white">{email}</strong> cuando tu cuenta sea activada.
             </p>
 
-            <p className="mt-3 text-xs" style={{ color: 'var(--muted)' }}>
-              PayStyle está en acceso anticipado. Estamos activando cuentas gradualmente
+            <p className="mt-3 text-xs text-slate-500">
+              Treazury está en acceso anticipado. Estamos activando cuentas gradualmente
               para garantizar la calidad del servicio.
             </p>
           </>
         )}
 
         {walletError ? (
-          <div
-            className="mt-4 flex items-start gap-2 rounded-xl px-4 py-3 text-left text-xs"
-            style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}
-          >
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-left text-xs text-red-300">
             <AlertCircle className="mt-px size-3.5 shrink-0" />
             <span className="flex-1">{walletError}</span>
             {onRetryWallet ? (
@@ -189,7 +176,7 @@ export default function PendingApproval({
                 type="button"
                 onClick={onRetryWallet}
                 disabled={walletRetrying === true}
-                className="ml-auto shrink-0 text-xs font-medium underline disabled:opacity-50"
+                className="ml-auto shrink-0 text-xs font-medium underline hover:text-white disabled:opacity-50"
               >
                 {walletRetrying === true ? 'Reintentando…' : 'Reintentar'}
               </button>
@@ -199,12 +186,7 @@ export default function PendingApproval({
 
         <button
           onClick={onSignOut}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium transition-all"
-          style={{
-            background: 'var(--surface-muted)',
-            color: 'var(--ink-2)',
-            border: '1px solid var(--border)',
-          }}
+          className="mt-6 flex w-full items-center justify-center gap-2 text-center font-mono text-xs tracking-wider text-slate-400 transition-colors hover:text-white"
         >
           <LogOut className="size-4" />
           Cerrar sesión

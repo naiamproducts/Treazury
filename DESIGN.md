@@ -4,6 +4,18 @@ This document is the design-system source of truth for Treazury. Code and
 comments default to ENGLISH. When this document and code disagree, this
 document wins; fix the code (alignment only — no redesigns).
 
+## 0. Language Rule
+
+- **Code, comments, identifiers: ENGLISH.** Component names, props,
+  localStorage keys, console prefixes, env vars, SDK classes stay in English.
+- **All USER-FACING copy: SPANISH (rioplatense voseo).** Every surface —
+  including the marketing landing — renders Spanish strings only: "Elegí",
+  "operás", "Recibirás", "Cerrar sesión". Warm, direct, no slang overload.
+- **Proper nouns and technical terms stay as-is:** Treazury, USDC, WhatsApp,
+  B2B, TRC20/Polygon/Arbitrum, country names/flags, numbers.
+- `index.html` follows the same rule: `<html lang="es">` plus a Spanish
+  `<title>`.
+
 ## 1. Tokens
 
 Owned by `tailwind.config.js` (`theme.extend`). Values below MUST match it
@@ -67,15 +79,19 @@ Rules:
 ## 3. Surface Rules
 
 - **Marketing landing + auth = luxe dark**, scoped to `.luxe-landing`.
-  Landing (`LandingPage`) and auth (`AuthPage`) are luxe dark. Auth was
-  restyled to luxe dark (decision 2026-10-16, see Open Questions); it MUST
-  use only luxe classes/tokens and MUST NOT reference light-theme vars.
+  Landing (`LandingPage`), auth (`AuthPage`), the approval gate
+  (`PendingApproval`, both steps: country select + approval wait), and the
+  first-run country gate (`CountrySetupModal`) are luxe dark (decisions
+  2026-10-16, see Open Questions). They MUST use only luxe classes/tokens
+  and MUST NOT reference light-theme vars. `CountrySetupModal` renders as an
+  overlay above the light dashboard, so its dark styling lives on the
+  modal's own classes (`luxe-glass` card, dark option rows/buttons) instead
+  of a `.luxe-landing` wrapper — nothing leaks into the dashboard beneath.
 - **Dashboard app = current light theme, unchanged.** `Shell` plus all views
   in `src/components/dashboard/` (`OrdersView`, `CatalogView`, `CustomersView`,
-  `ChargesView`, `SettingsView`), dialogs (`SendFundsDialog`,
-  `CountrySetupModal`, delete-confirm modal), `PendingApproval`, and all
-  loading/error/empty states use the light theme vars. Do NOT introduce
-  `.luxe-*` classes or dark backgrounds there.
+  `ChargesView`, `SettingsView`), in-dashboard dialogs (`SendFundsDialog`,
+  delete-confirm modal), and all loading/error/empty states use the light
+  theme vars. Do NOT introduce `.luxe-*` classes or dark backgrounds there.
 - **Buyer payment links (`PaymentPage`, `PayWithWallet`) = luxe dark**,
   scoped to `.luxe-landing` (decision 2026-10-16, see Open Questions).
   They MUST use only luxe classes/tokens and MUST NOT reference
@@ -87,7 +103,8 @@ Rules:
 
 - `.luxe-glass` — frosted dark card for hero content inside `.luxe-landing`
   (e.g. the LandingPage interactive showcase card, the AuthPage form card,
-  the PaymentPage charge card and invalid-link/paid receipts).
+  the PaymentPage charge card and invalid-link/paid receipts, the
+  PendingApproval card) and for the self-scoped `CountrySetupModal` card.
 - `.luxe-glass-pill` — frosted dark pill for floating banners inside
   `.luxe-landing` (e.g. the terms/cookie banner). Pill shape comes from
   `rounded-full` at the use site.
@@ -117,6 +134,14 @@ Rules:
    `PayWithWallet` are luxe dark, scoped to `.luxe-landing`.
 2. **AuthPage light vs. luxe dark: DECIDED 2026-10-16 → luxe dark.**
    `AuthPage` is luxe dark, scoped to `.luxe-landing`.
+3. **Auth gates light vs. luxe dark: DECIDED 2026-10-16 → luxe dark.**
+   `PendingApproval` (country select + approval wait, scoped to
+   `.luxe-landing`) and `CountrySetupModal` (self-scoped dark modal over
+   the light dashboard) are luxe dark. `SendFundsDialog` and the
+   delete-confirm modal stay light — they are in-dashboard flows.
+4. **UI copy language: DECIDED 2026-10-16 → Spanish everywhere.**
+   All user-facing strings are rioplatense Spanish, including the landing
+   page (see §0). Code, comments and identifiers stay in English.
 3. **Body/legacy fonts.** `body` uses DM Sans and `.display`/`.mono` use
    Space Grotesk / JetBrains Mono, while tokens say Plus Jakarta Sans /
    Cormorant Garamond / Space Grotesk. Switching the dashboard to token fonts
