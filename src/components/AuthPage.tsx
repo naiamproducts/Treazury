@@ -21,6 +21,23 @@ interface AuthPageProps {
 
 const showRegister = import.meta.env.VITE_SHOW_REGISTER === 'true'
 
+/**
+ * Supabase returns auth failures in English. Map the known ones to Spanish
+ * for display only — unknown messages pass through untouched.
+ */
+function friendlyAuthError(raw: string): string {
+  const msg = raw.toLowerCase()
+  if (msg.includes('invalid login credentials')) return 'Credenciales inválidas. Revisá tu email y contraseña.'
+  if (msg.includes('email not confirmed')) return 'Todavía no confirmaste tu email. Revisá tu bandeja de entrada.'
+  if (msg.includes('user already registered')) return 'Ese email ya está registrado. Ingresá en su lugar.'
+  if (msg.includes('password should be at least')) return 'La contraseña debe tener al menos 6 caracteres.'
+  if (msg.includes('signup requires a valid password')) return 'Ingresá una contraseña válida.'
+  if (msg.includes('unable to validate email address')) return 'El formato del email no es válido.'
+  if (msg.includes('email rate limit exceeded')) return 'Demasiados intentos. Esperá unos minutos y probá de nuevo.'
+  if (msg.includes('for security purposes')) return 'Por seguridad, esperá unos segundos antes de reintentar.'
+  return raw
+}
+
 const inputClass =
   'w-full rounded-xl py-3 pl-10 pr-4 text-sm text-white outline-none transition-all ' +
   'bg-white/[0.04] border border-white/10 placeholder:text-slate-500 ' +
@@ -43,7 +60,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
     setLoading(true)
     const { error: err } = await authActions.signIn(email, password)
     setLoading(false)
-    if (err) setError(err)
+    if (err) setError(friendlyAuthError(err))
   }
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -53,7 +70,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
     const { error: err } = await authActions.signUp(email, password, businessName)
     setLoading(false)
     if (err) {
-      setError(err)
+      setError(friendlyAuthError(err))
     } else {
       setSuccess('Cuenta creada. Revisa tu email para confirmar, luego ingresa.')
       setTab('login')

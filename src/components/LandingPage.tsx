@@ -42,7 +42,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
   const [volume, setVolume] = useState(DEFAULT_VOLUME)
   const [termsVisible, setTermsVisible] = useState(true)
 
-  const heroCtaLabel = showRegister ? 'Create Free Account' : 'Enter Dashboard'
+  const heroCtaLabel = showRegister ? 'Crear cuenta gratis' : 'Entrar al panel'
 
   const tabButton = (active: boolean) =>
     `w-1/2 py-2 px-4 text-xs font-mono tracking-wider rounded-full transition-all duration-300 ${
@@ -73,7 +73,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             <span className="w-1.5 h-1.5 rounded-full bg-icyCyan inline-block opacity-90 shadow-[0_0_8px_rgba(165,243,252,0.8)]"></span>
           </button>
           <span className="hidden sm:inline-block ml-3 pl-3 border-l border-white/10 text-[10px] font-mono tracking-widest text-slate-400 uppercase">
-            Private Liquidity
+            Liquidez privada
           </span>
         </div>
         <nav
@@ -81,16 +81,16 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
           data-purpose="header-nav-links"
         >
           <a className="hover:text-white transition-colors duration-200" href="#caracteristicas">
-            Features
+            Funciones
           </a>
           <a className="hover:text-white transition-colors duration-200" href="#whatsapp">
             WhatsApp B2B
           </a>
           <a className="hover:text-white transition-colors duration-200" href="#calculadora">
-            Calculator
+            Calculadora
           </a>
           <a className="hover:text-white transition-colors duration-200" href="#tarifas">
-            Pricing
+            Tarifas
           </a>
         </nav>
         <div className="flex items-center space-x-5" data-purpose="header-cta-group">
@@ -99,7 +99,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             onClick={onEnterApp}
             className="hidden sm:inline-block text-xs font-mono uppercase tracking-wider text-slate-300 hover:text-white transition-colors cursor-pointer"
           >
-            Sign In
+            Ingresar
           </button>
           <button
             type="button"
@@ -107,7 +107,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             className="relative group px-5 py-2.5 rounded-full text-xs font-mono tracking-wider text-white transition-all duration-300 border border-white/20 hover:border-white/50 bg-white/[0.04] hover:bg-white/[0.08] shadow-[0_0_15px_rgba(255,255,255,0.04)] hover:shadow-[0_0_20px_rgba(255,255,255,0.12)] cursor-pointer"
           >
             <span className="relative z-10 flex items-center gap-2">
-              Create Account <span className="text-icyCyan transition-transform group-hover:translate-x-0.5">→</span>
+              Crear cuenta <span className="text-icyCyan transition-transform group-hover:translate-x-0.5">→</span>
             </span>
           </button>
         </div>
@@ -125,15 +125,15 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             data-purpose="audience-badge"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-icyCyan mr-2.5 shadow-[0_0_6px_rgba(165,243,252,0.9)] animate-pulse"></span>
-            For Wholesale B2B Suppliers
+            Para proveedores mayoristas B2B
           </div>
 
           <div className="relative w-full mb-7" data-purpose="headline-block">
             <h1 className="text-4xl sm:text-6xl xl:text-[4.2rem] font-serif font-light leading-[1.08] tracking-tight text-white">
-              Collect your <br />
-              <span className="italic font-normal text-slate-100">WhatsApp orders</span> <br />
+              Cobrá tus <br />
+              <span className="italic font-normal text-slate-100">pedidos de WhatsApp</span> <br />
               <span className="font-light tracking-normal bg-gradient-to-r from-white via-slate-200 to-cyan-200/90 bg-clip-text text-transparent">
-                in instant USDC.
+                en USDC al instante.
               </span>
             </h1>
             <div className="w-16 h-px bg-gradient-to-r from-cyan-400 to-transparent mt-6 opacity-60"></div>
@@ -143,8 +143,8 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-lg font-light tracking-wide mb-10"
             data-purpose="hero-subtitle"
           >
-            Treazury unifies high-ticket WhatsApp commerce with institutional crypto settlement. Seamless
-            cataloging, encrypted orders, and automated compliance—received directly into your wallet in seconds.
+            Treazury une el comercio mayorista por WhatsApp con liquidación cripto institucional. Catálogo
+            simple, pedidos cifrados y cumplimiento automatizado — directo a tu wallet en segundos.
           </p>
 
           <div className="flex flex-wrap items-center gap-6 mb-11" data-purpose="cta-action-row">
@@ -175,7 +175,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                 className="text-[11px] font-mono text-slate-400 hover:text-white transition-colors tracking-wider underline decoration-white/20 underline-offset-4 flex items-center gap-1"
                 href="#request-country"
               >
-                Request region →
+                Solicitar región →
               </a>
             </div>
           </div>
@@ -187,17 +187,17 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
           >
             <div className="flex items-baseline space-x-2 font-mono">
               <span className="text-lg font-light text-white">0.00%</span>
-              <span className="text-[11px] uppercase tracking-wider text-slate-400">Hidden Fees</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">Comisiones ocultas</span>
             </div>
             <div className="h-3 w-px bg-white/10"></div>
             <div className="flex items-baseline space-x-2 font-mono">
               <span className="text-lg font-light text-cyan-300">2.0s</span>
-              <span className="text-[11px] uppercase tracking-wider text-slate-400">Net Settlement</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">Liquidación neta</span>
             </div>
             <div className="h-3 w-px bg-white/10"></div>
             <div className="flex items-baseline space-x-2 font-mono">
               <span className="text-lg font-light text-slate-200">T+0</span>
-              <span className="text-[11px] uppercase tracking-wider text-slate-400">Instant Liquidity</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">Liquidez inmediata</span>
             </div>
           </div>
         </section>
@@ -217,10 +217,10 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
               data-purpose="segmented-tab-switcher"
             >
               <button type="button" onClick={() => setTab('demo')} className={tabButton(tab === 'demo')}>
-                [Live Demo]
+                [Demo en vivo]
               </button>
               <button type="button" onClick={() => setTab('calc')} className={tabButton(tab === 'calc')}>
-                [Fee Calculator]
+                [Calculadora de comisiones]
               </button>
             </div>
 
@@ -229,10 +229,10 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                 <div className="flex items-center justify-between pb-1 text-xs font-mono">
                   <span className="text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                    Haute Fintech Stream
+                    Flujo fintech en vivo
                   </span>
                   <span className="text-[10px] text-slate-400 border border-white/10 px-2 py-0.5 rounded-full bg-white/[0.02]">
-                    HD Preview
+                    Vista previa HD
                   </span>
                 </div>
                 <div className="relative w-full rounded-2xl overflow-hidden border border-white/15 bg-black shadow-2xl group">
@@ -246,7 +246,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                       allowFullScreen
                       className="w-full h-full border-0 rounded-2xl opacity-90 group-hover:opacity-100 transition-opacity"
                       src="https://www.youtube-nocookie.com/embed/ScMzIvxBSi4?rel=0&modestbranding=1"
-                      title="Treazury Demo Video"
+                      title="Video demo de Treazury"
                     ></iframe>
                   </div>
                   <div className="p-3.5 bg-graphite/95 border-t border-white/10 flex items-center justify-between">
@@ -255,14 +255,14 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                         💬
                       </div>
                       <div>
-                        <p className="text-xs font-medium text-white tracking-wide">Order #8849 Confirmed</p>
+                        <p className="text-xs font-medium text-white tracking-wide">Pedido #8849 confirmado</p>
                         <p className="text-[10px] font-mono text-slate-400">Wholesale Textile Supply Ltd.</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-mono font-semibold text-cyan-300">+ $14,250.00 USDC</p>
                       <span className="text-[9px] font-mono text-emerald-400 flex items-center justify-end gap-1">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400"></span> Settled
+                        <span className="w-1 h-1 rounded-full bg-emerald-400"></span> Liquidado
                       </span>
                     </div>
                   </div>
@@ -271,20 +271,20 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             ) : (
               <div className="space-y-5 transition-all duration-300" id="panel-calc">
                 <div id="calculadora" className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-white tracking-wider uppercase font-semibold">Volume Settlement Model</span>
+                  <span className="text-white tracking-wider uppercase font-semibold">Modelo de liquidación por volumen</span>
                   <span className="text-[10px] text-icyCyan border border-cyan-400/30 px-2 py-0.5 rounded-full bg-cyan-950/40">
                     TRC20 / Polygon / Arbitrum
                   </span>
                 </div>
                 <div className="bg-black/50 p-5 rounded-2xl border border-white/10 space-y-4">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-xs text-slate-400 font-mono uppercase tracking-wider">Turnover Volume</span>
+                    <span className="text-xs text-slate-400 font-mono uppercase tracking-wider">Volumen operado</span>
                     <span className="text-lg font-mono font-bold text-white tracking-tight">
                       {formatVolume(volume)}
                     </span>
                   </div>
                   <input
-                    aria-label="Monthly volume in USDC"
+                    aria-label="Volumen mensual en USDC"
                     className="w-full h-1.5 rounded-lg cursor-pointer accent-cyan-300"
                     min={MIN_VOLUME}
                     max={MAX_VOLUME}
@@ -296,11 +296,11 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                   <div className="pt-3 border-t border-white/10 flex items-center justify-between">
                     <div className="space-y-1">
                       <div className="text-xs text-slate-300 flex items-center gap-1.5 font-mono">
-                        <span className="text-slate-400">Savings vs Swift/Bank:</span>
+                        <span className="text-slate-400">Ahorro vs SWIFT/banco:</span>
                         <span className="font-bold text-cyan-300">{formatSavings(volume)}</span>
                       </div>
                       <div className="text-[11px] font-mono text-slate-400">
-                        Protocol Fee: <span className="text-white font-medium">0.35% USDC</span> (Cap $15)
+                        Comisión de protocolo: <span className="text-white font-medium">0.35% USDC</span> (Tope $15)
                       </div>
                     </div>
                     <div className="w-16 h-8 flex items-center justify-center">
@@ -320,8 +320,8 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                   </div>
                 </div>
                 <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-[11px] font-mono text-slate-400">
-                  <span>Zero rolling reserves withheld.</span>
-                  <span className="text-slate-200">Full self-custodial flow</span>
+                  <span>Sin reservas retenidas.</span>
+                  <span className="text-slate-200">Flujo 100% autocustodiado</span>
                 </div>
               </div>
             )}
@@ -332,7 +332,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             <div className="flex items-center justify-center gap-3 mb-4">
               <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent flex-1"></div>
               <span className="text-[10px] font-mono tracking-[0.3em] text-slate-400 uppercase flex items-center gap-2">
-                POWERED BY THE BEST
+                IMPULSADO POR LOS MEJORES
               </span>
               <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent flex-1"></div>
             </div>
@@ -399,16 +399,16 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-icyCyan animate-pulse"></div>
               <p className="text-xs text-slate-300 font-light leading-none">
-                By using Treazury, you agree to our{' '}
+                Al usar Treazury, aceptás nuestros{' '}
                 <a className="text-white underline decoration-white/40 hover:decoration-white font-medium" href="#terms">
-                  Terms
+                  Términos
                 </a>{' '}
-                &{' '}
+                y{' '}
                 <a
                   className="text-white underline decoration-white/40 hover:decoration-white font-medium"
                   href="#privacy"
                 >
-                  Privacy
+                  Privacidad
                 </a>
                 .
               </p>
@@ -419,11 +419,11 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                 onClick={() => setTermsVisible(false)}
                 className="px-3.5 py-1.5 rounded-full text-[11px] font-mono tracking-wider text-black bg-white hover:bg-slate-200 transition-all cursor-pointer font-medium"
               >
-                Acknowledge
+                Entendido
               </button>
               <button
                 type="button"
-                aria-label="Dismiss terms banner"
+                aria-label="Descartar aviso de términos"
                 onClick={() => setTermsVisible(false)}
                 className="text-slate-400 hover:text-white text-xs transition-colors cursor-pointer px-1"
               >

@@ -219,7 +219,7 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
               </button>
 
               <p className="text-[11px] leading-relaxed text-center" style={{ color: 'var(--subtle)' }}>
-                La transacción se firma en tu dispositivo. PayStyle nunca custodia tus claves.
+                La transacción se firma en tu dispositivo. Treazury nunca custodia tus claves.
               </p>
             </div>
           </motion.div>

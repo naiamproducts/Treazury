@@ -127,14 +127,14 @@ export default function App() {
       .then(({ error }) => {
         if (error) {
           console.warn('[PayStyle] payout alert registration failed; charges still work', error)
-          toast.warning('Payment alerts could not be enabled. Charges still work.')
+          toast.warning('No se pudieron activar las alertas de pago. Los cobros siguen funcionando.')
           return
         }
         registeredPayoutRef.current = { tenantId, address }
       })
       .catch((invokeErr: unknown) => {
         console.warn('[PayStyle] payout alert registration failed; charges still work', invokeErr)
-        toast.warning('Payment alerts could not be enabled. Charges still work.')
+        toast.warning('No se pudieron activar las alertas de pago. Los cobros siguen funcionando.')
       })
   }, [auth, merchantWallet])
 

@@ -292,7 +292,7 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
           <p className="mono mt-1 break-all text-xs" style={{ color: 'var(--ink-2)' }}>{store.merchantAddress || '—'}</p>
         </div>
         <p className="text-xs" style={{ color: 'var(--subtle)' }}>
-          Es tu propia dirección: los cobros van directo a tu wallet en Arc Testnet. PayStyle nunca custodia tus fondos.
+          Es tu propia dirección: los cobros van directo a tu wallet en Arc Testnet. Treazury nunca custodia tus fondos.
         </p>
       </Section>
 
