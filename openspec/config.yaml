@@ -1,0 +1,48 @@
+schema: spec-driven
+
+context: |
+  Project: Treazury — USDC settlement + commercial documentation platform for import/export
+  Stack: Bun, React 18, TypeScript (~7.0), Vite 6, Tailwind 3, Supabase (Postgres+RLS+Auth+Edge Functions),
+    wagmi/viem (Arc Testnet USDC), Privy embedded wallets, Circle SDKs, Foundry contracts, Playwright e2e.
+  Quality: `bun run check` = oxlint (type-aware) + tsc --noEmit; e2e via `bunx playwright test e2e/`.
+  Architecture: multi-tenant SaaS (RLS, tenant_id everywhere); module interfaces (PaymentProvider,
+    InvoiceEngine) with factory.ts as sole concrete import point; DESIGN.md is the design-system source of truth.
+  Persistence: hybrid (openspec files + Engram). Web copy/variables in English (import/export pivot 2026-10-17).
+
+strict_tdd: true
+
+testing:
+  unit_command: ""            # no unit runner detected (no vitest/jest); see follow-ups
+  e2e_command: "bunx playwright test e2e/"
+  contracts_test_command: "forge test"
+  check_command: "bun run check"
+  build_command: "bun run build"
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes (payments, RLS, contracts, migrations)
+    - State tenant-isolation and RLS impact explicitly
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Multi-tenant behavior (tenant_id, RLS) MUST be covered where data is involved
+  design:
+    - Document architecture decisions with rationale
+    - Respect module contracts in AGENTS.md (PaymentProvider, InvoiceEngine); factory.ts is the only concrete import point
+    - Follow DESIGN.md tokens for any UI surface (luxe-dark theme)
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    guidelines:
+      - Follow existing code patterns
+      - Run `bun run check` before considering a task complete
+      - Do not break e2e specs in e2e/ without updating them
+    tdd: true
+    test_command: "bun run check"
+  verify:
+    test_command: "bunx playwright test e2e/"
+    build_command: "bun run build"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
