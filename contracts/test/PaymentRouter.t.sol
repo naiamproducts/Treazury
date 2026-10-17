@@ -769,3 +769,202 @@ contract VaultEdgeCasesTest is PaymentRouterTestBase {
         (ok);
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  23. deposit / depositWithPermit — atomic settle-through-vault
+// ─────────────────────────────────────────────────────────────────────────────
+contract DepositTest is PaymentRouterTestBase {
+
+    function test_Deposit_FullAmount_SweepsAndAttributesPayer() public {
+        address vault = _createDefaultOrder();
+        usdc.mint(payer, EXPECTED_AMOUNT);
+
+        uint256 platformFee = (EXPECTED_AMOUNT * PLATFORM_FEE_BPS) / 10_000;
+        uint256 devFee      = (EXPECTED_AMOUNT * DEV_FEE_BPS) / 10_000;
+        uint256 merchantAmt = EXPECTED_AMOUNT - platformFee - devFee;
+
+        vm.startPrank(payer);
+        usdc.approve(vault, EXPECTED_AMOUNT);
+        // Funds + event in the SAME tx: payer is msg.sender, not address(0).
+        vm.expectEmit(true, true, false, true, vault);
+        emit OrderVault.PaymentReceived(CHARGE_ID, payer, EXPECTED_AMOUNT, platformFee, devFee, merchantAmt);
+        OrderVault(payable(vault)).deposit(EXPECTED_AMOUNT);
+        vm.stopPrank();
+
+        OrderVault v = OrderVault(payable(vault));
+        assertTrue(v.swept());
+        assertEq(v.received(), EXPECTED_AMOUNT);
+        // Sweep only credits pendingClaims — the USDC stays in the vault.
+        assertEq(usdc.balanceOf(vault), EXPECTED_AMOUNT);
+        assertEq(usdc.balanceOf(payer), 0);
+    }
+
+    function test_Deposit_Partial_NoSweep() public {
+        address vault = _createDefaultOrder();
+        uint256 half = EXPECTED_AMOUNT / 2;
+        usdc.mint(payer, half);
+
+        vm.startPrank(payer);
+        usdc.approve(vault, half);
+        OrderVault(payable(vault)).deposit(half);
+        vm.stopPrank();
+
+        OrderVault v = OrderVault(payable(vault));
+        assertFalse(v.swept());
+        assertEq(v.received(), half);
+    }
+
+    function test_Deposit_CompletesOverPreexistingPlainTransfer() public {
+        address vault = _createDefaultOrder();
+        uint256 half = EXPECTED_AMOUNT / 2;
+
+        // Exchange-style plain transfer first (unaccounted until settled).
+        usdc.mint(stranger, half);
+        vm.prank(stranger);
+        usdc.transfer(vault, half);
+
+        // In-app deposit of the remaining half sweeps and accounts for both.
+        usdc.mint(payer, half);
+        vm.startPrank(payer);
+        usdc.approve(vault, half);
+        OrderVault(payable(vault)).deposit(half);
+        vm.stopPrank();
+
+        OrderVault v = OrderVault(payable(vault));
+        assertTrue(v.swept());
+        assertEq(v.received(), EXPECTED_AMOUNT);
+    }
+
+    function test_Revert_Deposit_ZeroAmount() public {
+        address vault = _createDefaultOrder();
+        vm.prank(payer);
+        vm.expectRevert(bytes("OrderVault: zero deposit"));
+        OrderVault(payable(vault)).deposit(0);
+    }
+
+    function test_Revert_Deposit_AfterSweep() public {
+        address vault = _createDefaultOrder();
+        _payVault(vault, EXPECTED_AMOUNT); // full sweep
+
+        usdc.mint(payer, 1e6);
+        vm.startPrank(payer);
+        usdc.approve(vault, 1e6);
+        vm.expectRevert(bytes("OrderVault: already swept"));
+        OrderVault(payable(vault)).deposit(1e6);
+        vm.stopPrank();
+    }
+
+    function test_Revert_Deposit_NoAllowance() public {
+        address vault = _createDefaultOrder();
+        usdc.mint(payer, EXPECTED_AMOUNT);
+        // No approve — SafeERC20 transferFrom must revert (atomic: no funds move).
+        vm.prank(payer);
+        vm.expectRevert();
+        OrderVault(payable(vault)).deposit(EXPECTED_AMOUNT);
+        assertEq(usdc.balanceOf(payer), EXPECTED_AMOUNT);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  24. depositWithPermit — one-tx payment with off-chain approval
+// ─────────────────────────────────────────────────────────────────────────────
+contract DepositWithPermitTest is PaymentRouterTestBase {
+    uint256 internal permitPk;
+    address internal permitPayer;
+
+    function setUp() public override {
+        super.setUp();
+        (permitPayer, permitPk) = makeAddrAndKey("permitPayer");
+    }
+
+    /// @dev Build an EIP-2612 signature over the mock token's domain.
+    function _signPermit(
+        address owner_,
+        address spender,
+        uint256 value,
+        uint256 nonce,
+        uint256 deadline
+    ) internal view returns (uint8 v, bytes32 r, bytes32 s) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+                owner_,
+                spender,
+                value,
+                nonce,
+                deadline
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", usdc.DOMAIN_SEPARATOR(), structHash));
+        (v, r, s) = vm.sign(permitPk, digest);
+    }
+
+    function test_DepositWithPermit_FullAmount_SweepsInOneTx() public {
+        address vault = _createDefaultOrder();
+        usdc.mint(permitPayer, EXPECTED_AMOUNT);
+        uint256 deadline = block.timestamp + 1 hours;
+
+        (uint8 sigV, bytes32 sigR, bytes32 sigS) = _signPermit(
+            permitPayer,
+            vault,
+            EXPECTED_AMOUNT,
+            usdc.nonces(permitPayer),
+            deadline
+        );
+
+        // No prior approve: the permit alone must be enough.
+        vm.prank(permitPayer);
+        OrderVault(payable(vault)).depositWithPermit(EXPECTED_AMOUNT, deadline, sigV, sigR, sigS);
+
+        OrderVault v = OrderVault(payable(vault));
+        assertTrue(v.swept());
+        assertEq(v.received(), EXPECTED_AMOUNT);
+        assertEq(usdc.balanceOf(permitPayer), 0);
+        assertEq(usdc.nonces(permitPayer), 1);
+    }
+
+    function test_Revert_DepositWithPermit_BadSignature() public {
+        address vault = _createDefaultOrder();
+        usdc.mint(permitPayer, EXPECTED_AMOUNT);
+        uint256 deadline = block.timestamp + 1 hours;
+
+        // Sign with the wrong key.
+        (, uint256 wrongPk) = makeAddrAndKey("wrongSigner");
+        bytes32 structHash = keccak256(
+            abi.encode(
+                keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+                permitPayer,
+                vault,
+                EXPECTED_AMOUNT,
+                usdc.nonces(permitPayer),
+                deadline
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", usdc.DOMAIN_SEPARATOR(), structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongPk, digest);
+
+        vm.prank(permitPayer);
+        vm.expectRevert();
+        OrderVault(payable(vault)).depositWithPermit(EXPECTED_AMOUNT, deadline, v, r, s);
+        // Atomic: no funds moved on a failed permit.
+        assertEq(usdc.balanceOf(permitPayer), EXPECTED_AMOUNT);
+    }
+
+    function test_Revert_DepositWithPermit_ExpiredDeadline() public {
+        address vault = _createDefaultOrder();
+        usdc.mint(permitPayer, EXPECTED_AMOUNT);
+        uint256 deadline = block.timestamp - 1;
+
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(
+            permitPayer,
+            vault,
+            EXPECTED_AMOUNT,
+            usdc.nonces(permitPayer),
+            deadline
+        );
+
+        vm.prank(permitPayer);
+        vm.expectRevert();
+        OrderVault(payable(vault)).depositWithPermit(EXPECTED_AMOUNT, deadline, v, r, s);
+    }
+}

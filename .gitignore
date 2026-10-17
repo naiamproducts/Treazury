@@ -33,3 +33,8 @@ broadcast/
 .idea/
 .DS_Store
 Thumbs.db
+
+# ── Tooling artifacts ──────────────────────────────────────────────────────
+.archify/
+test-results/
+.atl/

@@ -8,6 +8,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 
 /// @dev Packed order parameters passed to createOrder to avoid stack-too-deep.
 struct OrderParams {
@@ -277,6 +278,49 @@ contract OrderVault is ReentrancyGuard {
     /// @param payer Address attributed as payer in emitted events.
     function receivePayment(address payer) external nonReentrant {
         _process(payer);
+    }
+
+    /// @notice Pulls USDC from the caller and accounts for it in one transaction.
+    /// @dev Atomic path for in-app wallets: funds arrive AND the matching
+    ///      PaymentReceived / PartialPaymentReceived event is emitted in the
+    ///      same tx, so reconciliation never depends on a follow-up settle().
+    ///      Plain ERC-20 transfers cannot notify this contract (no hook), so
+    ///      exchanges and external wallets keep using transfer + settle().
+    /// @param amount USDC (6 decimals) to pull from the caller.
+    function deposit(uint256 amount) external nonReentrant {
+        require(!swept, "OrderVault: already swept");
+        require(amount > 0, "OrderVault: zero deposit");
+
+        IERC20 token = IERC20(usdcToken);
+        token.safeTransferFrom(msg.sender, address(this), amount);
+        _process(msg.sender);
+    }
+
+    /// @notice EIP-2612 permit + deposit in a single transaction.
+    /// @dev The buyer signs the approval off-chain (free, no gas); this call
+    ///      submits the permit together with the pull and the accounting, so
+    ///      the whole payment is one wallet confirmation. Any permit failure
+    ///      reverts the entire tx — no funds move.
+    /// @param amount   USDC (6 decimals) to pull from the caller.
+    /// @param deadline Permit deadline (unix seconds).
+    /// @param v        Signature v component.
+    /// @param r        Signature r component.
+    /// @param s        Signature s component.
+    function depositWithPermit(
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant {
+        require(!swept, "OrderVault: already swept");
+        require(amount > 0, "OrderVault: zero deposit");
+
+        IERC20Permit(usdcToken).permit(msg.sender, address(this), amount, deadline, v, r, s);
+
+        IERC20 token = IERC20(usdcToken);
+        token.safeTransferFrom(msg.sender, address(this), amount);
+        _process(msg.sender);
     }
 
     /// @notice Refunds current vault balance before sweep.
