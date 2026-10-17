@@ -8,6 +8,8 @@ export type OrderStatus = 'draft' | 'quoted' | 'confirmed' | 'invoiced' | 'charg
 export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'cancelled' | 'voided'
 export type ChargeStatus = 'pending' | 'paid' | 'partial' | 'expired' | 'failed' | 'cancelled'
 export type MemberRole = 'owner' | 'admin' | 'seller' | 'viewer'
+export type CommercialDocStatus = 'draft' | 'released' | 'voided'
+export type CommercialDocType = 'commercial_invoice' | 'packing_list'
 
 export type Tenant = {
   id: string
@@ -32,6 +34,8 @@ export type Tenant = {
   next_invoice_number: number
   apply_igtf: boolean
   fiscal_config: Record<string, unknown>
+  /** Partner commission in basis points of settled volume; null = unconfigured (PA-R2). */
+  partner_fee_bps: number | null
 }
 
 export type TenantMember = {
@@ -40,6 +44,8 @@ export type TenantMember = {
   user_id: string
   role: MemberRole
   created_at: string
+  /** Partner tenant that referred this member's signup; null = unattributed (PA-R1). */
+  attributed_partner_tenant_id: string | null
 }
 
 export type Contact = {
@@ -73,6 +79,12 @@ export type Product = {
   stock: number | null
   stock_reserved: number
   is_active: boolean
+  /** Customs / logistics fields for export documents (design D8). */
+  hs_code: string | null
+  country_of_origin: string | null
+  weight_net_kg: string | null
+  weight_gross: string | null
+  packages: number | null
   attributes: {
     fieldDefs?: Array<{ key: string; label: string; type: string; unit?: string; options?: string[]; required?: boolean }>
     values?: Record<string, string>
@@ -180,6 +192,32 @@ export type Invoice = {
   xml_url: string | null
 }
 
+/**
+ * Non-fiscal commercial document (commercial invoice / packing list).
+ * Separate table from `invoices` on purpose — fiscal isolation guardrail.
+ * See docs/migrations/006_commercial_docs.sql.
+ */
+export type CommercialDoc = {
+  id: string
+  tenant_id: string
+  order_id: string | null
+  created_at: string
+  updated_at: string
+  doc_type: CommercialDocType
+  doc_number: number
+  status: CommercialDocStatus
+  released_at: string | null
+  incoterm: string | null
+  currency: string
+  seller_snapshot: Record<string, unknown>
+  buyer_snapshot: Record<string, unknown>
+  lines: Record<string, unknown>[]
+  weight_net_kg: string | null
+  weight_gross: string | null
+  packages_total: number | null
+  pdf_path: string | null
+}
+
 export type AccessRequest = {
   id: string
   created_at: string
@@ -204,6 +242,7 @@ export type Database = {
       charges: { Row: Charge; Insert: Partial<Charge>; Update: Partial<Charge>; Relationships: [] }
       payments: { Row: Payment; Insert: Partial<Payment>; Update: Partial<Payment>; Relationships: [] }
       invoices: { Row: Invoice; Insert: Partial<Invoice>; Update: Partial<Invoice>; Relationships: [] }
+      commercial_docs: { Row: CommercialDoc; Insert: Partial<CommercialDoc>; Update: Partial<CommercialDoc>; Relationships: [] }
       access_requests: { Row: AccessRequest; Insert: Partial<AccessRequest>; Update: Partial<AccessRequest>; Relationships: [] }
     }
     Views: Record<string, never>
@@ -214,12 +253,29 @@ export type Database = {
       // takes no tenant argument on purpose. Raises 42501 if the tenant is
       // missing or not approved. See docs/migrations/002_atomic_invoice_number.sql.
       next_invoice_number: { Args: Record<string, never>; Returns: number }
+      // Reserves the next commercial doc number (CD-00001, ...) for the
+      // caller's tenant. Own sequence, mirrors next_invoice_number() but
+      // NEVER touches the fiscal sequence (CD-R6).
+      // See docs/migrations/006_commercial_docs.sql.
+      next_commercial_doc_number: { Args: Record<string, never>; Returns: number }
+      // Records the caller's signup attribution to an approved partner
+      // tenant (PA-R1). Once-only; writes only the caller's own membership
+      // row. See docs/migrations/006_commercial_docs.sql.
+      attribute_signup: { Args: { p_partner: string | null }; Returns: boolean }
+      // Partner panel aggregates: attributed signups, settled volume, fee
+      // bps, accrued commission (PA-R2/PA-R3). Aggregates only.
+      partner_panel_stats: {
+        Args: Record<string, never>
+        Returns: { attributed_signups: number; settled_volume: string; fee_bps: number; commission: string }[]
+      }
     }
     Enums: {
       order_status: OrderStatus
       invoice_status: InvoiceStatus
       charge_status: ChargeStatus
       member_role: MemberRole
+      commercial_doc_status: CommercialDocStatus
+      commercial_doc_type: CommercialDocType
     }
   }
 }
