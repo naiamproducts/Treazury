@@ -12,6 +12,8 @@ import type { InvoiceEngine } from '@/modules/invoicing'
 import type { CountryCode } from '@/modules/shared/types'
 import { countryMeta, currencyForCountry, readPricingPref, writePricingPref, readBankDetails, writeBankDetails } from '@/lib/currency'
 import type { PricingPref, BankDetails } from '@/lib/currency'
+import { t } from '@/i18n/t'
+import { storeErrorMessage } from './CatalogView'
 
 /**
  * Fiscal engine driving the labels below. Sourced from the registered invoice
@@ -93,7 +95,10 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
         setTimeout(() => setSaved(false), 2500)
         await onTenantUpdate?.()
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo guardar la configuración.'))
+      .catch((err: unknown) => {
+        // StoreError.message is Spanish — map the code to errors.store.* (task 7.3).
+        setError(storeErrorMessage(err))
+      })
       .finally(() => setSaving(false))
   }
 
@@ -103,7 +108,7 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
   if (store.loading) {
     return (
       <div className="mx-auto max-w-md py-16 text-center text-sm" style={{ color: 'var(--muted)' }}>
-        Cargando configuración…
+        {t('settings.loading')}
       </div>
     )
   }
@@ -112,31 +117,31 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
     <div className="mx-auto max-w-md space-y-4">
 
       {/* Business info */}
-      <Section icon={<Building2 className="size-4" />} title="Datos del negocio">
+      <Section icon={<Building2 className="size-4" />} title={t('settings.businessData')}>
         <div>
-          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Nombre del negocio</label>
-          <input className={inputCls} style={inputStyle} value={form.name} onChange={e => patch('name', e.target.value)} placeholder="Mi Negocio" />
+          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('settings.businessName')}</label>
+          <input className={inputCls} style={inputStyle} value={form.name} onChange={e => patch('name', e.target.value)} placeholder={t('settings.businessNamePlaceholder')} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Teléfono</label>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('settings.field.phone')}</label>
             <input className={inputCls} style={inputStyle} value={form.phone} onChange={e => patch('phone', e.target.value)} placeholder={`${meta.dialCode} ${meta.phoneExample}`} />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Email</label>
-            <input className={inputCls} style={inputStyle} value={form.email} onChange={e => patch('email', e.target.value)} placeholder="info@negocio.com" />
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('settings.field.email')}</label>
+            <input className={inputCls} style={inputStyle} value={form.email} onChange={e => patch('email', e.target.value)} placeholder={t('settings.field.emailPlaceholder')} />
           </div>
         </div>
       </Section>
 
       {/* Pricing currency preference */}
-      <Section icon={<Wallet className="size-4" />} title="Moneda para cargar precios">
+      <Section icon={<Wallet className="size-4" />} title={t('settings.priceCurrency')}>
         <p className="text-xs" style={{ color: 'var(--muted)' }}>
-          Catálogo y Cobros abren en esta moneda. El cobro siempre se liquida en USDC.
+          {t('settings.priceCurrencyHint')}
         </p>
         <div className="flex gap-1.5">
           {([
-            { id: 'auto' as PricingPref, label: `Automática (${prefCurrency})` },
+            { id: 'auto' as PricingPref, label: t('settings.pricingAuto', { currency: prefCurrency }) },
             { id: 'usd' as PricingPref, label: 'USD' },
             ...(prefCurrency !== 'USD' ? [{ id: 'local' as PricingPref, label: prefCurrency }] : []),
           ]).map(opt => (
@@ -156,15 +161,18 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
       </Section>
 
       {/* Bank details for the transfer option in payment links */}
-      <Section icon={<Building2 className="size-4" />} title="Datos para cobrar por transferencia">
+      <Section icon={<Building2 className="size-4" />} title={t('settings.bankData')}>
         <p className="text-xs" style={{ color: 'var(--muted)' }}>
-          Salen en tus links de pago para que el cliente te transfiera. Si los dejas vacíos, esa opción no aparece.
+          {t('settings.bankDataHint')}
         </p>
         <div>
-          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Banco</label>
-          <input className={inputCls} style={inputStyle} value={bank.bankName} onChange={e => patchBank('bankName', e.target.value)} placeholder={meta.bankExample} />
+          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('settings.field.bank')}</label>
+          {/* Example placeholders come from countryMeta (app data, e.g. AR
+              "Banco de la Nación Argentina") — i18n-scan exemption. */}
+          <input data-purpose="country-data-field" className={inputCls} style={inputStyle} value={bank.bankName} onChange={e => patchBank('bankName', e.target.value)} placeholder={meta.bankExample} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        {/* Alias/account LABELS are countryMeta data too (VE "Pago Móvil…"). */}
+        <div data-purpose="country-data-field" className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{meta.aliasLabel}</label>
             <input className={inputCls} style={inputStyle} value={bank.alias} onChange={e => patchBank('alias', e.target.value)} placeholder={meta.aliasExample} />
@@ -180,14 +188,14 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
           className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
           style={{ background: 'var(--accent)' }}
         >
-          <Check className="size-4" /> {bankSaved ? 'Guardado' : 'Guardar datos bancarios'}
+          <Check className="size-4" /> {bankSaved ? t('settings.bankSaved') : t('settings.saveBank')}
         </button>
       </Section>
 
       {/* Fiscal data — country-aware */}
       <Section
         icon={<Receipt className="size-4" />}
-        title={fiscalEngine ? `Datos fiscales — ${fiscalEngine.countryName}` : 'Facturación'}
+        title={fiscalEngine ? t('settings.fiscalData', { country: fiscalEngine.countryName }) : t('settings.billing')}
       >
         {!fiscalEngine ? (
           <div className="space-y-3">
@@ -195,17 +203,16 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
               className="rounded-xl px-4 py-3 text-sm"
               style={{ background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.2)', color: '#92400e' }}
             >
-              La facturación local aún no está disponible para tu país.
-              Estamos habilitando nuevos países progresivamente.
+              {t('settings.fiscalUnavailable')}
             </div>
             <p className="text-xs" style={{ color: 'var(--muted)' }}>
-              Mientras tanto, podés cobrar en USDC y compartir links de pago normalmente.
+              {t('settings.fiscalUnavailableHint')}
             </p>
           </div>
         ) : (
           <>
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>País fiscal</label>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('settings.fiscalCountry')}</label>
               <select
                 className={inputCls} style={inputStyle}
                 value={form.country}
@@ -219,8 +226,8 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Dirección fiscal</label>
-              <input className={inputCls} style={inputStyle} value={form.address} onChange={e => patch('address', e.target.value)} placeholder={fiscalEngine.addressPlaceholder ?? 'Dirección fiscal'} />
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('settings.fiscalAddress')}</label>
+              <input className={inputCls} style={inputStyle} value={form.address} onChange={e => patch('address', e.target.value)} placeholder={fiscalEngine.addressPlaceholder ?? t('settings.fiscalAddress')} />
             </div>
             {fiscalEngine && (
               <>
@@ -228,8 +235,10 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
                   className="rounded-xl px-3 py-2.5 text-xs"
                   style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', color: 'var(--muted)' }}
                 >
-                  El módulo de facturación {fiscalEngine.countryName} calcula los impuestos automáticamente.
-                  El {fiscalEngine.taxIdLabel} aparece en todas las facturas emitidas.
+                  {t('settings.taxModuleHint', {
+                    country: fiscalEngine.countryName,
+                    taxIdLabel: fiscalEngine.taxIdLabel,
+                  })}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
@@ -245,7 +254,7 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
               </>
             )}
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Prefijo de factura</label>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('settings.invoicePrefix')}</label>
               <input
                 className={`${inputCls} mono`} style={inputStyle}
                 value={form.invoicePrefix}
@@ -258,8 +267,8 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
             {fiscalEngine && fiscalEngine.country === 'VE' && (
               <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
                 <div>
-                  <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Aplicar IGTF 3%</p>
-                  <p className="text-xs" style={{ color: 'var(--muted)' }}>Impuesto a pagos en divisas (USDC)</p>
+                  <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{t('settings.igtf')}</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>{t('settings.igtfHint')}</p>
                 </div>
                 <button onClick={() => patch('applyIgtf', !form.applyIgtf)}>
                   {form.applyIgtf
@@ -273,12 +282,15 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
             {!form.rif ? (
               <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(217,119,6,0.08)', color: '#b45309', border: '1px solid rgba(217,119,6,0.2)' }}>
                 <AlertCircle className="size-3.5 shrink-0" />
-                El {fiscalEngine?.taxIdLabel ?? 'ID fiscal'} es requerido para emitir facturas válidas{fiscalEngine ? ` en ${fiscalEngine.countryName}` : ''}.
+                {t('settings.error.requireTaxId', {
+                  taxIdLabel: fiscalEngine?.taxIdLabel ?? t('settings.taxIdFallback'),
+                  country: fiscalEngine ? ` in ${fiscalEngine.countryName}` : '',
+                })}
               </div>
             ) : fiscalEngine && !fiscalEngine.validateTaxId(form.rif.trim()) ? (
               <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(217,119,6,0.08)', color: '#b45309', border: '1px solid rgba(217,119,6,0.2)' }}>
                 <AlertCircle className="size-3.5 shrink-0" />
-                El formato no parece válido. Ej: {fiscalEngine.taxIdExample}
+                {t('settings.error.validateTaxId', { example: fiscalEngine.taxIdExample })}
               </div>
             ) : null}
           </>
@@ -286,13 +298,13 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
       </Section>
 
       {/* Wallet */}
-      <Section icon={<Wallet className="size-4" />} title="Wallet de cobro">
+      <Section icon={<Wallet className="size-4" />} title={t('settings.wallet')}>
         <div className="rounded-2xl px-4 py-3" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-          <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Dirección activa</p>
+          <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('settings.walletActiveAddress')}</p>
           <p className="mono mt-1 break-all text-xs" style={{ color: 'var(--ink-2)' }}>{store.merchantAddress || '—'}</p>
         </div>
         <p className="text-xs" style={{ color: 'var(--subtle)' }}>
-          Es tu propia dirección: los cobros van directo a tu wallet en Arc Testnet. Treazury nunca custodia tus fondos.
+          {t('settings.walletCustodyHint')}
         </p>
       </Section>
 
@@ -310,7 +322,7 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
         style={{ background: saved ? 'var(--success)' : 'var(--accent)' }}
       >
         <Check className="size-4" />
-        {saving ? 'Guardando…' : saved ? 'Configuración guardada' : 'Guardar configuración'}
+        {saving ? t('settings.saving') : saved ? t('settings.saved') : t('settings.save')}
       </button>
     </div>
   )

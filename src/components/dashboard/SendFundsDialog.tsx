@@ -19,6 +19,8 @@ import { useWallets } from '@privy-io/react-auth'
 import { getUsdc } from '@/onchain-facts'
 import { parseUsdc, formatUsdc } from '@/onchain-money'
 import { useUsdcBalance } from '@/hooks/useUsdcBalance'
+import { t } from '@/i18n/t'
+import { storeErrorMessage } from './CatalogView'
 
 const ARC_TESTNET_CHAIN_ID = 5042002
 const usdcFact = getUsdc(ARC_TESTNET_CHAIN_ID)!
@@ -72,7 +74,7 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
     if (!senderAddress || !amountNum) return
     const wallet = wallets.find(w => w.address.toLowerCase() === senderAddress.toLowerCase())
     if (!wallet) {
-      setError('No se encontró la wallet embebida. Cierra sesión y vuelve a entrar.')
+      setError(t('funds.error.walletNotFound'))
       return
     }
     setStatus('signing')
@@ -99,9 +101,11 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
         setStatus('idle')
         setTxHash(null)
         if (isUserRejection(err)) {
-          setError('Firma cancelada.')
+          setError(t('funds.error.rejected'))
         } else {
-          setError(err instanceof Error ? err.message : 'No se pudo enviar la transacción.')
+          // StoreError maps to errors.store.*; any other Error keeps its
+          // own English (viem/chain) message.
+          setError(storeErrorMessage(err))
         }
       }
     })()
@@ -131,9 +135,9 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
             <div className="p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>Enviar fondos</h3>
+                  <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>{t('funds.title')}</h3>
                   <p className="mt-0.5 text-xs" style={{ color: 'var(--muted)' }}>
-                    USDC · Arc Testnet{balance !== null ? ` · Saldo: ${formatUsdc(balance)}` : ''}
+                    {t('funds.subtitle')}{balance !== null ? ` · ${t('funds.balance', { balance: formatUsdc(balance) })}` : ''}
                   </p>
                 </div>
                 <button
@@ -148,7 +152,7 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
 
               <div>
                 <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-                  Dirección de destino <span className="font-normal opacity-60">(0x…)</span>
+                  {t('funds.recipient')} <span className="font-normal opacity-60">(0x…)</span>
                 </label>
                 <input
                   className={`${inputCls} mono`}
@@ -160,12 +164,12 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
                   autoComplete="off"
                 />
                 {recipient.trim() !== '' && !recipientValid && (
-                  <p className="mt-1 text-[11px]" style={{ color: 'var(--danger)' }}>Dirección EVM inválida.</p>
+                  <p className="mt-1 text-[11px]" style={{ color: 'var(--danger)' }}>{t('funds.error.validateRecipient')}</p>
                 )}
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Monto (USDC)</label>
+                <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('funds.amount')}</label>
                 <input
                   className={`${inputCls} mono tabular-nums`}
                   style={inputStyle}
@@ -176,10 +180,10 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
                   disabled={status !== 'idle'}
                 />
                 {amount.trim() !== '' && !amountValid && (
-                  <p className="mt-1 text-[11px]" style={{ color: 'var(--danger)' }}>Monto inválido (máx. 6 decimales).</p>
+                  <p className="mt-1 text-[11px]" style={{ color: 'var(--danger)' }}>{t('funds.error.validateAmount')}</p>
                 )}
                 {amountValid && balance !== null && !withinBalance && (
-                  <p className="mt-1 text-[11px]" style={{ color: 'var(--danger)' }}>Saldo insuficiente.</p>
+                  <p className="mt-1 text-[11px]" style={{ color: 'var(--danger)' }}>{t('funds.error.insufficientBalance')}</p>
                 )}
               </div>
 
@@ -198,7 +202,7 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
                   className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition-all hover:opacity-80"
                   style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--muted)' }}
                 >
-                  Transacción enviada — ver en explorador
+                  {t('funds.txSent')}
                   <ExternalLink className="size-3" />
                 </a>
               )}
@@ -210,16 +214,16 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
                 style={{ background: 'var(--accent)' }}
               >
                 {status === 'signing' ? (
-                  <><Loader2 className="size-4 animate-spin" /> Esperando firma…</>
+                  <><Loader2 className="size-4 animate-spin" /> {t('funds.waitingSignature')}</>
                 ) : status === 'pending' ? (
-                  <><Loader2 className="size-4 animate-spin" /> Confirmando en red…</>
+                  <><Loader2 className="size-4 animate-spin" /> {t('funds.confirming')}</>
                 ) : (
-                  <><Send className="size-4" /> Enviar USDC</>
+                  <><Send className="size-4" /> {t('funds.send')}</>
                 )}
               </button>
 
               <p className="text-[11px] leading-relaxed text-center" style={{ color: 'var(--subtle)' }}>
-                La transacción se firma en tu dispositivo. Treazury nunca custodia tus claves.
+                {t('funds.custodyHint')}
               </p>
             </div>
           </motion.div>

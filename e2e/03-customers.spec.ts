@@ -6,18 +6,23 @@ test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdow
     await mockFx(page)
     await login(page)
 
-    // 1. Sidebar incluye "Clientes" y navega a la vista
-    const clientesNav = page.getByRole('button', { name: /Clientes/i })
+    // 1. Sidebar incluye "Clientes"/"Customers" y navega a la vista
+    // (dual-language selectors across the Phase 7b sweep, task 7.3)
+    const clientesNav = page.getByRole('button', { name: /clientes|customers/i })
     await expect(clientesNav).toBeVisible()
     await clientesNav.click()
 
-    await expect(page.getByRole('heading', { name: 'Clientes' })).toBeVisible({ timeout: 10_000 })
-    const nuevoClienteBtn = page.getByRole('button', { name: /nuevo cliente|agregar primer cliente/i }).first()
+    await expect(page.getByRole('heading', { name: /clientes|customers/i })).toBeVisible({ timeout: 10_000 })
+    const nuevoClienteBtn = page
+      .getByRole('button', { name: /nuevo cliente|agregar primer cliente|new customer|add your first customer/i })
+      .first()
     await expect(nuevoClienteBtn).toBeVisible()
 
     // 2. Crear un nuevo cliente para que la tienda tenga al menos un contacto
     await nuevoClienteBtn.click()
-    const nameInput = page.getByPlaceholder(/Distribuidora Central/i)
+    // Name placeholder: dual-language across the 7b sweep (pre: "Ej:
+    // Distribuidora Central C.A.", post: "e.g. Central Trading Co").
+    const nameInput = page.getByPlaceholder(/Distribuidora Central|Central Trading Co/i)
     await expect(nameInput).toBeVisible({ timeout: 10_000 })
     await nameInput.fill('Distribuidora Los Andes')
 
@@ -26,15 +31,15 @@ test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdow
       await phoneInput.fill('+54 11 5555 4444')
     }
 
-    await page.getByRole('button', { name: /agregar cliente|guardar cambios/i }).click()
+    await page.getByRole('button', { name: /agregar cliente|guardar cambios|add customer|save changes/i }).click()
 
     // El cliente debe aparecer en la lista
     await expect(page.getByText('Distribuidora Los Andes')).toBeVisible({ timeout: 10_000 })
 
     // 3. Ir a Órdenes y abrir modal de Nueva orden
-    const ordenesNav = page.getByRole('button', { name: 'Órdenes' })
+    const ordenesNav = page.getByRole('button', { name: /órdenes|orders/i })
     await ordenesNav.click()
-    await expect(page.getByRole('heading', { name: 'Órdenes' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /órdenes|orders/i })).toBeVisible()
 
     await page.getByRole('button', { name: /new order/i }).click()
     await expect(page.getByRole('heading', { name: 'New order' })).toBeVisible({ timeout: 10_000 })
@@ -80,7 +85,7 @@ test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdow
   test('Órdenes: estado vacío sin datos y buscador/filtros cuando hay órdenes', async ({ page }) => {
     await mockFx(page)
     await login(page)
-    await expect(page.getByRole('heading', { name: 'Órdenes' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /órdenes|orders/i })).toBeVisible()
 
     const searchOrders = page.getByPlaceholder(/search by #/i)
     const pendingTab = page.getByRole('button', { name: 'Pending' })

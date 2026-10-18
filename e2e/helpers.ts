@@ -4,7 +4,8 @@ export const EMAIL = 'e2e-country-test@paystyle.dev'
 export const PASSWORD = 'E2eTest2026!'
 
 /** Login through the UI and land on the dashboard. Handles the country modal. */
-export async function login(page: Page) {
+export async function login(page: Page, opts: { dismissCountryModal?: boolean } = {}) {
+  const { dismissCountryModal = true } = opts
   await page.goto('/')
   // Landing is English since import-export-pivot: enter the auth stage via
   // the header "Sign in" CTA (stable data-purpose locator), then drive the
@@ -31,12 +32,16 @@ export async function login(page: Page) {
     await submit.click()
     await dashboardReady.waitFor({ timeout: 30_000 })
   }
-  // Dismiss country modal if it appears (fresh browser context)
-  const modal = page.getByText('¿Dónde operás?')
-  if (await modal.isVisible().catch(() => false)) {
-    await page.getByRole('button', { name: /argentina/i }).click()
-    await page.getByRole('button', { name: /continuar/i }).click()
-    await modal.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {})
+  // Dismiss country modal if it appears (fresh browser context). The modal
+  // copy is swept in Phase 7b (task 7.3): accept BOTH the pre-sweep Spanish
+  // and the post-sweep English so this helper stays green across the sweep.
+  if (dismissCountryModal) {
+    const modal = page.getByText(/¿dónde operás\?|where do you operate\?/i)
+    if (await modal.isVisible().catch(() => false)) {
+      await page.getByRole('button', { name: /argentina/i }).click()
+      await page.getByRole('button', { name: /continuar|continue/i }).click()
+      await modal.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {})
+    }
   }
 }
 

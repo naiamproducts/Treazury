@@ -41,8 +41,9 @@ import {
   expectNoSpanishCopy,
 } from './i18n-utils'
 
-/** Access-request form subtree (scanned by e2e/09; excluded here by design). */
-const DEFERRED_FORM_SELECTOR =
+/** Access-request subtrees — excluded from the landing scan by design; their
+ *  own no-Spanish scan is owned by e2e/09-app-locale.spec.ts (task 7.1). */
+const ACCESS_FORM_SELECTOR =
   '[data-purpose="access-request-form"], [data-purpose="access-request-success"]'
 
 /** Spanish phrases rendered by the pre-pivot landing; must all be gone. */
@@ -205,19 +206,20 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
     await page.goto('/')
     // Active locale is `en`
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-    // The access form MUST have rendered before we remove it — otherwise a
-    // skipped render would make the no-Spanish scan vacuously green. The
-    // heading assertion is dual-language: it accepts the pre-7.2 Spanish
-    // heading and the swept English one, so this file stays green across the
-    // sweep (e2e/09 owns the form's own no-Spanish scan).
-    const deferredForm = page.locator('[data-purpose="access-request-form"]')
-    await expect(deferredForm).toBeVisible()
-    await expect(deferredForm.getByRole('heading', { name: /solicit. acceso|request access/i })).toBeVisible()
-    // Remove the access-request subtree (owned by e2e/09) and scan
-    // landing-owned copy: innerText AND visible-element attributes
+    // The access-request form MUST have rendered before we exclude it —
+    // otherwise a skipped render would make the no-Spanish scan vacuously
+    // green. The heading assertion is dual-language: it accepts the pre-7.2
+    // Spanish heading and the swept English one, so this file stays green
+    // across the sweep (e2e/09 owns the form's own no-Spanish scan).
+    const accessForm = page.locator('[data-purpose="access-request-form"]')
+    await expect(accessForm).toBeVisible()
+    await expect(accessForm.getByRole('heading', { name: /solicit. acceso|request access/i })).toBeVisible()
+    // Exclude the access-request subtree (its scan is owned by e2e/09) and
+    // scan landing-owned copy: innerText AND visible-element attributes
     // (aria-label, placeholder, title, alt, value).
-    const scan = await collectVisibleCopy(page, { exclude: [DEFERRED_FORM_SELECTOR] })
-    // Deferred subtree really was removed (form was rendered, not skipped)
+    const scan = await collectVisibleCopy(page, { exclude: [ACCESS_FORM_SELECTOR] })
+    // The access subtree really was removed above (form was rendered, not
+    // skipped) — excludedCount > 0 proves the exclusion matched a live node.
     expect(scan.excludedCount).toBeGreaterThan(0)
     // Case-insensitive scan: normalize both sides before matching.
     const haystack = copyHaystack(scan)

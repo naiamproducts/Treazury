@@ -12,11 +12,18 @@ import type { DashboardStore, Product, ProductVariant, FieldDefinition } from '@
 import { currencyForCountry, fetchUsdRate, formatLocal, readPricingPref, writePricingPref, resolveEntryCurrency } from '@/lib/currency'
 import type { PricingPref } from '@/lib/currency'
 import { t } from '@/i18n/t'
-import { asStoreError } from '@/store/errors'
+import { StoreError } from '@/store/errors'
 
-/** Localized English message for a thrown store mutation error — never blank. */
+/**
+ * Localized English message for a thrown mutation error — never blank.
+ * A StoreError maps its code to the `errors.store.*` catalog; any other
+ * `Error` keeps its own message (viem/SDK diagnostics are English);
+ * anything else falls back to `errors.store.unknown`.
+ */
 export function storeErrorMessage(thrown: unknown): string {
-  return t(`errors.store.${asStoreError(thrown).code}`)
+  if (thrown instanceof StoreError) return t(`errors.store.${thrown.code}`)
+  if (thrown instanceof Error && thrown.message) return thrown.message
+  return t('errors.store.unknown')
 }
 
 
@@ -207,7 +214,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
               </p>
             )}
             {price && parseFloat(price) > 0 && localCurrency !== 'USD' && fxRate === null && (
-              <p className="mt-1 text-xs" style={{ color: 'var(--subtle)' }}>{t('catalog.approxLoading')}</p>
+              <p className="mt-1 text-xs" style={{ color: 'var(--subtle)' }}>{t('charges.equivalent')}</p>
             )}
           </div>
           {!showVariants && (

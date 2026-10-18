@@ -7,6 +7,17 @@
  * live value of controlled inputs — an empty-looking React input carries its
  * current value as a property, not an attribute, so both must be scanned.
  * Matching is case-insensitive: normalize both sides before comparing.
+ *
+ * Stored-data exemption (task 7.3): views echo TENANT DATA (customer names,
+ * charge memos, country option lists, …) that is neither app chrome nor app
+ * copy — it may legitimately contain Spanish. The exact text nodes that
+ * carry stored data are marked `data-purpose="stored-data"` in the markup;
+ * cases exempt them by passing `exclude: ['[data-purpose="stored-data"]']`
+ * (or a data-specific selector like `country-options`) to
+ * `collectVisibleCopy`, which removes the matching nodes before the
+ * haystack is built. Exemptions are per-node, never per-region: surrounding
+ * chrome (buttons, headings, badges) stays in the scan. The orthography
+ * scan itself (`SPANISH_ORTHOGRAPHY`) stays strict for everything else.
  */
 
 import { expect } from '@playwright/test'
@@ -29,9 +40,10 @@ export interface VisibleCopy {
 
 /**
  * Collect visible copy inside `scope` (CSS selector, default `body`),
- * removing any node matching `exclude` first — for subtrees whose copy is
- * still deferred, or data-driven nodes (e.g. <select> country options)
- * outside the current sweep scope.
+ * removing any node matching `exclude` first — the stored-data exemption:
+ * exact nodes that render tenant data (marked `data-purpose="stored-data"`
+ * in the markup, plus country-option selects), or data outside the current
+ * sweep scope. Per-node, so surrounding app chrome stays in the scan.
  *
  * Throws when the scope selector matches nothing so an unrendered view can
  * never masquerade as a clean scan.
@@ -81,7 +93,8 @@ export function copyHaystack(copy: VisibleCopy): string {
 
 /**
  * Assert the scanned copy carries no Spanish orthography and none of the
- * pre-sweep phrases survive (both sides lowercased).
+ * pre-sweep phrases survive (both sides lowercased). Stored-tenant-data
+ * regions are exempted upstream, through `collectVisibleCopy`'s `exclude`.
  */
 export function expectNoSpanishCopy(haystack: string, oldPhrases: string[]): void {
   expect(haystack).not.toMatch(SPANISH_ORTHOGRAPHY)

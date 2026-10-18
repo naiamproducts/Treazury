@@ -66,7 +66,7 @@ export default function AccessRequestForm({ onEnterApp }: AccessRequestFormProps
     if (!name.trim()) next.name = t('access.error.validateName')
     if (!businessName.trim()) next.businessName = t('access.error.validateBusinessName')
     if (!email.trim()) next.email = t('access.error.emailRequired')
-    else if (!isValidEmail(email)) next.email = t('access.error.validateEmail')
+    else if (!isValidEmail(email)) next.email = t('errors.invalidEmail')
     if (!country) next.country = t('access.error.selectCountry')
     if (!volumeRange) next.volumeRange = t('access.error.selectVolume')
     setErrors(next)

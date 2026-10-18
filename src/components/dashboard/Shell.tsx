@@ -13,21 +13,23 @@ import {
 import { TokenUSDC } from '@web3icons/react'
 import type { DashboardStore } from '@/store'
 import { useUsdcBalance, formatUsdc } from '@/hooks/useUsdcBalance'
+import { t, type MessageKey } from '@/i18n/t'
+import { storeErrorMessage } from './CatalogView'
 import SendFundsDialog from './SendFundsDialog'
 
 export type View = 'orders' | 'catalog' | 'customers' | 'charges' | 'settings'
 interface NavItem {
   id: View
-  label: string
+  labelKey: MessageKey
   icon: React.ReactNode
 }
 
 const NAV: NavItem[] = [
-  { id: 'orders',    label: 'Órdenes',       icon: <ShoppingCart className="size-4" /> },
-  { id: 'catalog',   label: 'Catálogo',      icon: <Package className="size-4" /> },
-  { id: 'customers', label: 'Clientes',      icon: <Users className="size-4" /> },
-  { id: 'charges',   label: 'Cobros',        icon: <Wallet className="size-4" /> },
-  { id: 'settings',  label: 'Configuración', icon: <Settings className="size-4" /> },
+  { id: 'orders',    labelKey: 'shell.nav.orders',    icon: <ShoppingCart className="size-4" /> },
+  { id: 'catalog',   labelKey: 'shell.nav.catalog',   icon: <Package className="size-4" /> },
+  { id: 'customers', labelKey: 'shell.nav.customers', icon: <Users className="size-4" /> },
+  { id: 'charges',   labelKey: 'shell.nav.charges',   icon: <Wallet className="size-4" /> },
+  { id: 'settings',  labelKey: 'shell.nav.settings',  icon: <Settings className="size-4" /> },
 ]
 
 // ── Sidebar — extracted as top-level component to avoid "component in render" lint ──
@@ -56,7 +58,7 @@ function Sidebar({ store, view, onNav, onSignOut }: SidebarProps) {
           <p className="display text-sm font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>
             {store.config.name || 'Treazury'}
           </p>
-          <p className="text-xs" style={{ color: 'var(--subtle)' }}>Dashboard</p>
+          <p className="text-xs" style={{ color: 'var(--subtle)' }}>{t('shell.dashboard')}</p>
         </div>
       </div>
 
@@ -75,7 +77,7 @@ function Sidebar({ store, view, onNav, onSignOut }: SidebarProps) {
               }}
             >
               <span style={{ color: active ? 'var(--accent)' : 'var(--subtle)' }}>{item.icon}</span>
-              {item.label}
+              {t(item.labelKey)}
               {item.id === 'orders' && pendingCount > 0 && (
                 <span
                   className="ml-auto rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -106,7 +108,7 @@ function Sidebar({ store, view, onNav, onSignOut }: SidebarProps) {
           style={{ color: 'var(--subtle)' }}
         >
           <LogOut className="size-3.5" />
-          Cerrar sesión
+          {t('shell.logout')}
         </button>
       </div>
     </div>
@@ -135,7 +137,7 @@ function FundsCounter({ address }: { address: string | null }) {
       <div className="flex items-center gap-2">
         <TokenUSDC variant="branded" size={20} />
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold" style={{ color: 'var(--subtle)' }}>Saldo</p>
+          <p className="text-[11px] font-semibold" style={{ color: 'var(--subtle)' }}>{t('shell.balance')}</p>
           <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--ink)' }}>
             {balance !== null ? `${formatUsdc(balance)} USDC` : loading ? '…' : '—'}
           </p>
@@ -174,7 +176,7 @@ function FundsCounter({ address }: { address: string | null }) {
           style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}
         >
           <ArrowUpRight className="size-3" />
-          Enviar / retirar fondos
+          {t('shell.sendWithdrawFunds')}
         </button>
       </div>
       <SendFundsDialog open={showSend} onClose={() => setShowSend(false)} senderAddress={address} />
@@ -194,6 +196,7 @@ interface ShellProps {
 export default function Shell({ store, children, onSignOut }: ShellProps) {
   const [view, setView] = useState<View>('orders')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const activeNav = NAV.find(n => n.id === view)
 
   const handleNav = (v: View) => {
     setView(v)
@@ -256,7 +259,7 @@ export default function Shell({ store, children, onSignOut }: ShellProps) {
             <Menu className="size-4" style={{ color: 'var(--ink)' }} />
           </button>
           <p className="display text-sm font-bold" style={{ color: 'var(--ink)' }}>
-            {NAV.find(n => n.id === view)?.label}
+            {activeNav ? t(activeNav.labelKey) : null}
           </p>
           {sidebarOpen && (
             <button
@@ -275,13 +278,13 @@ export default function Shell({ store, children, onSignOut }: ShellProps) {
           style={{ borderColor: 'var(--border)' }}
         >
           <span style={{ color: 'var(--accent)' }}>
-            {NAV.find(n => n.id === view)?.icon}
+            {activeNav?.icon}
           </span>
           <h1
             className="display text-base font-bold"
             style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}
           >
-            {NAV.find(n => n.id === view)?.label}
+            {activeNav ? t(activeNav.labelKey) : null}
           </h1>
         </div>
 
@@ -294,8 +297,11 @@ export default function Shell({ store, children, onSignOut }: ShellProps) {
               style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}
             >
               <AlertCircle className="mt-px size-3.5 shrink-0" />
-              <span className="flex-1">{store.error.message}</span>
-              <button onClick={store.dismissError} aria-label="Cerrar">
+              {/* StoreError.message is Spanish (store/errors.ts MESSAGES) —
+                  map through the errors.store.* keys so this unawaited-failure
+                  banner stays English like every other swept surface. */}
+              <span className="flex-1">{storeErrorMessage(store.error)}</span>
+              <button onClick={store.dismissError} aria-label={t('shell.close')}>
                 <X className="size-3.5" />
               </button>
             </div>

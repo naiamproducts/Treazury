@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Globe, ArrowRight, Loader2 } from 'lucide-react'
 import type { DashboardStore } from '@/store'
 import { SUPPORTED_COUNTRIES } from '@/lib/currency'
+import { t } from '@/i18n/t'
 
 const STORAGE_PREFIX = 'paystyle:country-confirmed:'
 
@@ -76,14 +77,15 @@ export default function CountrySetupModal({ store, tenantId }: CountrySetupModal
             </div>
 
             <h2 className="text-center font-serif text-2xl font-medium text-white">
-              ¿Dónde operás?
+              {t('country.title')}
             </h2>
             <p className="mt-1 text-center text-sm text-slate-400">
-              Elegí tu país para configurar la moneda local y las preferencias fiscales.
+              {t('country.subtitle')}
             </p>
 
-            {/* Country list */}
-            <div className="mt-5 space-y-2">
+            {/* Country list — option names/flags are SUPPORTED_COUNTRIES
+                app data (e.g. "México"): i18n-scan exemption (e2e/09 case). */}
+            <div data-purpose="country-options" className="mt-5 space-y-2">
               {SUPPORTED_COUNTRIES.map(c => (
                 <button
                   key={c.code}
@@ -107,8 +109,8 @@ export default function CountrySetupModal({ store, tenantId }: CountrySetupModal
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 font-mono text-xs font-medium uppercase tracking-wider text-black transition-all hover:bg-slate-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 shadow-[0_0_30px_rgba(255,255,255,0.25)]"
             >
               {saving
-                ? <><Loader2 className="size-4 animate-spin" /> Guardando…</>
-                : <><ArrowRight className="size-4" /> Continuar</>
+                ? <><Loader2 className="size-4 animate-spin" /> {t('country.saving')}</>
+                : <><ArrowRight className="size-4" /> {t('country.continue')}</>
               }
             </button>
           </motion.div>

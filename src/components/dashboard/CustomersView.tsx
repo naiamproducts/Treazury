@@ -13,6 +13,8 @@ import type { DashboardStore, Customer } from '@/store'
 import { countryMeta } from '@/lib/currency'
 import { invoiceFactory } from '@/modules/invoicing/factory'
 import type { CountryCode } from '@/modules/shared/types'
+import { t } from '@/i18n/t'
+import { storeErrorMessage } from './CatalogView'
 
 function engineForCountry(country: CountryCode) {
   try {
@@ -61,13 +63,16 @@ function CustomerForm({ initial, country, onSave, onCancel }: CustomerFormProps)
     e.preventDefault()
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setError('El nombre del cliente es requerido.')
+      setError(t('customers.nameRequired'))
       return
     }
 
     const trimmedTaxId = taxId.trim()
     if (engine && trimmedTaxId && !engine.validateBuyerTaxId(trimmedTaxId)) {
-      setError(`El ${engine.buyerTaxIdLabel} no tiene un formato válido. Ej: ${engine.buyerTaxIdExample}`)
+      setError(t('customers.error.validateTaxId', {
+        label: engine.buyerTaxIdLabel,
+        example: engine.buyerTaxIdExample,
+      }))
       return
     }
 
@@ -81,7 +86,8 @@ function CustomerForm({ initial, country, onSave, onCancel }: CustomerFormProps)
       address: address.trim() || undefined,
       notes: notes.trim() || undefined,
     }).catch(err => {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el cliente.')
+      // StoreError.message is Spanish — map the code to errors.store.* (task 7.3).
+      setError(storeErrorMessage(err))
     }).finally(() => {
       setSaving(false)
     })
@@ -93,7 +99,7 @@ function CustomerForm({ initial, country, onSave, onCancel }: CustomerFormProps)
       <form onSubmit={handleSubmit} className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>
-            {initial ? 'Editar cliente' : 'Nuevo cliente'}
+            {initial ? t('customers.edit') : t('customers.new')}
           </h3>
           <button
             type="button"
@@ -116,21 +122,21 @@ function CustomerForm({ initial, country, onSave, onCancel }: CustomerFormProps)
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-              Nombre o Razón Social *
+              {t('customers.field.name')}
             </label>
             <input
               className={inputCls}
               style={inputStyle}
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="Ej: Distribuidora Central C.A."
+              placeholder={t('customers.field.namePlaceholder')}
               autoFocus
             />
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-              WhatsApp / Teléfono <span className="font-normal opacity-60">({meta.dialCode})</span>
+              {t('customers.field.phone')} <span className="font-normal opacity-60">({meta.dialCode})</span>
             </label>
             <input
               className={inputCls}
@@ -143,20 +149,20 @@ function CustomerForm({ initial, country, onSave, onCancel }: CustomerFormProps)
 
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-              {engine ? engine.buyerTaxIdLabel : 'ID fiscal'} <span className="font-normal opacity-60">(opcional)</span>
+              {engine ? engine.buyerTaxIdLabel : t('customers.field.taxIdFallback')} <span className="font-normal opacity-60">{t('customers.optional')}</span>
             </label>
             <input
               className={inputCls}
               style={inputStyle}
               value={taxId}
               onChange={e => setTaxId(e.target.value)}
-              placeholder={engine ? engine.buyerTaxIdPlaceholder : 'Documento fiscal'}
+              placeholder={engine ? engine.buyerTaxIdPlaceholder : t('customers.field.taxIdPlaceholderFallback')}
             />
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-              Email <span className="font-normal opacity-60">(opcional)</span>
+              Email <span className="font-normal opacity-60">{t('customers.optional')}</span>
             </label>
             <input
               type="email"
@@ -164,33 +170,33 @@ function CustomerForm({ initial, country, onSave, onCancel }: CustomerFormProps)
               style={inputStyle}
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="cliente@empresa.com"
+              placeholder={t('customers.field.emailPlaceholder')}
             />
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-              Dirección <span className="font-normal opacity-60">(opcional)</span>
+              {t('customers.field.address')} <span className="font-normal opacity-60">{t('customers.optional')}</span>
             </label>
             <input
               className={inputCls}
               style={inputStyle}
               value={address}
               onChange={e => setAddress(e.target.value)}
-              placeholder={`Av. Principal, ${meta.cityExample}`}
+              placeholder={t('customers.field.addressPlaceholder', { city: meta.cityExample })}
             />
           </div>
 
           <div className="sm:col-span-2">
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-              Notas internas <span className="font-normal opacity-60">(opcional)</span>
+              {t('customers.field.notes')} <span className="font-normal opacity-60">{t('customers.optional')}</span>
             </label>
             <input
               className={inputCls}
               style={inputStyle}
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Condiciones de pago, horario de entrega, etc."
+              placeholder={t('customers.field.notesPlaceholder')}
             />
           </div>
         </div>
@@ -202,7 +208,7 @@ function CustomerForm({ initial, country, onSave, onCancel }: CustomerFormProps)
             className="flex-1 rounded-2xl py-2.5 text-sm font-semibold transition-all hover:opacity-80"
             style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }}
           >
-            Cancelar
+            {t('customers.cancel')}
           </button>
           <button
             type="submit"
@@ -211,7 +217,7 @@ function CustomerForm({ initial, country, onSave, onCancel }: CustomerFormProps)
             style={{ background: 'var(--accent)' }}
           >
             <Check className="size-4" />
-            {saving ? 'Guardando…' : initial ? 'Guardar cambios' : 'Agregar cliente'}
+            {saving ? t('customers.saving') : initial ? t('customers.saveChanges') : t('customers.add')}
           </button>
         </div>
       </form>
@@ -268,7 +274,7 @@ function CustomerCard({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-bold" style={{ color: 'var(--ink)' }}>
+                <p className="truncate text-sm font-bold" style={{ color: 'var(--ink)' }} data-purpose="stored-data">
                   {customer.name}
                 </p>
                 {isHabitual && (
@@ -276,12 +282,12 @@ function CustomerCard({
                     className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
                     style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)' }}
                   >
-                    Habitual
+                    {t('customers.frequent')}
                   </span>
                 )}
               </div>
               {customer.taxId && (
-                <p className="mono text-xs" style={{ color: 'var(--muted)' }}>
+                <p className="mono text-xs" style={{ color: 'var(--muted)' }} data-purpose="stored-data">
                   {engine ? `${engine.buyerTaxIdLabel}: ` : ''}{customer.taxId}
                 </p>
               )}
@@ -293,7 +299,7 @@ function CustomerCard({
               onClick={onEdit}
               className="flex size-7 items-center justify-center rounded-lg transition-all hover:opacity-80"
               style={{ color: 'var(--muted)', background: 'var(--surface-muted)' }}
-              title="Editar cliente"
+              title={t('customers.edit')}
             >
               <Pencil className="size-3.5" />
             </button>
@@ -301,7 +307,7 @@ function CustomerCard({
               onClick={onDelete}
               className="flex size-7 items-center justify-center rounded-lg transition-all hover:opacity-80"
               style={{ color: 'var(--danger)', background: 'rgba(186,43,76,0.06)' }}
-              title="Eliminar cliente"
+              title={t('customers.delete')}
             >
               <Trash2 className="size-3.5" />
             </button>
@@ -313,7 +319,7 @@ function CustomerCard({
           {customer.phone && (
             <div className="flex items-center gap-2 truncate">
               <Phone className="size-3.5 shrink-0" style={{ color: 'var(--muted)' }} />
-              <span className="truncate">{customer.phone}</span>
+              <span className="truncate" data-purpose="stored-data">{customer.phone}</span>
               {phoneClean && (
                 <a
                   href={`https://wa.me/${phoneClean}`}
@@ -331,19 +337,19 @@ function CustomerCard({
           {customer.email && (
             <div className="flex items-center gap-2 truncate">
               <Mail className="size-3.5 shrink-0" style={{ color: 'var(--muted)' }} />
-              <span className="truncate">{customer.email}</span>
+              <span className="truncate" data-purpose="stored-data">{customer.email}</span>
             </div>
           )}
 
           {customer.address && (
             <div className="flex items-center gap-2 truncate">
               <MapPin className="size-3.5 shrink-0" style={{ color: 'var(--muted)' }} />
-              <span className="truncate" style={{ color: 'var(--muted)' }}>{customer.address}</span>
+              <span className="truncate" style={{ color: 'var(--muted)' }} data-purpose="stored-data">{customer.address}</span>
             </div>
           )}
 
           {customer.notes && (
-            <p className="pt-1 text-[11px] italic" style={{ color: 'var(--muted)' }}>
+            <p className="pt-1 text-[11px] italic" style={{ color: 'var(--muted)' }} data-purpose="stored-data">
               “{customer.notes}”
             </p>
           )}
@@ -356,7 +362,7 @@ function CustomerCard({
         style={{ borderColor: 'var(--border)', background: 'var(--surface-muted)' }}
       >
         <span className="text-xs" style={{ color: 'var(--muted)' }}>
-          {ordersCount} {ordersCount === 1 ? 'orden' : 'órdenes'}
+          {t(ordersCount === 1 ? 'customers.countOne' : 'customers.countMany', { count: ordersCount })}
         </span>
 
         <button
@@ -365,7 +371,7 @@ function CustomerCard({
           style={{ background: 'var(--accent)' }}
         >
           <ShoppingCart className="size-3.5" />
-          Nueva orden
+          {t('customers.newOrder')}
         </button>
       </div>
     </motion.div>
@@ -417,7 +423,8 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
       setShowForm(false)
       setEditingId(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el cliente.')
+      // StoreError.message is Spanish — map the code to errors.store.* (task 7.3).
+      setError(storeErrorMessage(err))
       throw err
     }
   }
@@ -428,7 +435,7 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
       await store.deleteCustomer(id)
       setConfirmDeleteId(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo eliminar el cliente.')
+      setError(storeErrorMessage(err))
     }
   }
 
@@ -451,7 +458,9 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs" style={{ color: 'var(--muted)' }}>
-            {store.customers.length} cliente{store.customers.length !== 1 ? 's' : ''} registrado{store.customers.length !== 1 ? 's' : ''}
+            {t(store.customers.length === 1 ? 'customers.registeredOne' : 'customers.registeredMany', {
+              count: store.customers.length,
+            })}
           </p>
         </div>
         <button
@@ -459,7 +468,7 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
           className="flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]"
           style={{ background: 'var(--accent)' }}
         >
-          <Plus className="size-4" /> Nuevo cliente
+          <Plus className="size-4" /> {t('customers.new')}
         </button>
       </div>
 
@@ -500,7 +509,9 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
             style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink)' }}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder={`Buscar por nombre, WhatsApp, ${engine ? engine.buyerTaxIdLabel : 'documento'}, email...`}
+            placeholder={t('customers.searchPlaceholder', {
+              doc: engine ? engine.buyerTaxIdLabel : t('customers.searchDocFallback'),
+            })}
           />
           {search && (
             <button
@@ -533,8 +544,8 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
                   <Trash2 className="size-4" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold" style={{ color: 'var(--ink)' }}>¿Eliminar cliente?</h4>
-                  <p className="text-xs" style={{ color: 'var(--muted)' }}>El cliente ya no aparecerá en la lista ni en nuevas órdenes.</p>
+                  <h4 className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{t('customers.confirmDelete')}</h4>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>{t('customers.deleteWarning')}</p>
                 </div>
               </div>
 
@@ -544,14 +555,14 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
                   className="flex-1 rounded-xl py-2 text-xs font-semibold"
                   style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }}
                 >
-                  Cancelar
+                  {t('customers.cancel')}
                 </button>
                 <button
                   onClick={() => void handleDelete(confirmDeleteId)}
                   className="flex-1 rounded-xl py-2 text-xs font-semibold text-white"
                   style={{ background: 'var(--danger)' }}
                 >
-                  Sí, eliminar
+                  {t('customers.confirmDeleteYes')}
                 </button>
               </div>
             </div>
@@ -568,16 +579,16 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
           <div className="flex size-14 items-center justify-center rounded-2xl" style={{ background: 'var(--surface-muted)', color: 'var(--subtle)' }}>
             <Users className="size-7" />
           </div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Sin clientes guardados todavía</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{t('customers.empty')}</p>
           <p className="max-w-xs text-xs" style={{ color: 'var(--muted)' }}>
-            Los clientes se guardan automáticamente al crear órdenes o puedes agregarlos aquí con sus datos de contacto y facturación.
+            {t('customers.emptyHint')}
           </p>
           <button
             onClick={() => { setEditingId(null); setShowForm(true) }}
             className="mt-2 flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs font-semibold text-white transition-all hover:scale-[1.02]"
             style={{ background: 'var(--accent)' }}
           >
-            <Plus className="size-3.5" /> Agregar primer cliente
+            <Plus className="size-3.5" /> {t('customers.addFirst')}
           </button>
         </div>
       )}
@@ -590,10 +601,10 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
         >
           <Search className="size-6" style={{ color: 'var(--subtle)' }} />
           <p className="text-xs font-semibold" style={{ color: 'var(--ink)' }}>
-            No se encontraron clientes para “{search}”
+            {t('customers.noResults', { query: search })}
           </p>
           <p className="text-[11px]" style={{ color: 'var(--muted)' }}>
-            Verifica el nombre, número de WhatsApp o RIF ingresado.
+            {t('customers.noResultsHint')}
           </p>
           <div className="flex gap-2 mt-2">
             <button
@@ -601,20 +612,21 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
               className="rounded-xl px-3 py-1.5 text-xs font-medium"
               style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }}
             >
-              Limpiar búsqueda
+              {t('customers.clearSearch')}
             </button>
             <button
               onClick={() => { setEditingId(null); setShowForm(true) }}
               className="rounded-xl px-3 py-1.5 text-xs font-semibold text-white"
               style={{ background: 'var(--accent)' }}
             >
-              + Crear nuevo cliente
+              {t('customers.createNew')}
             </button>
           </div>
         </div>
       )}
 
-      {/* Customer Cards Grid */}
+      {/* Customer Cards Grid — stored tenant data is marked per-node
+          data-purpose="stored-data" inside CustomerCard (e2e/09 case). */}
       {filteredCustomers.length > 0 && !showForm && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {filteredCustomers.map(customer => {

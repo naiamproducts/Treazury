@@ -2,18 +2,21 @@
  * en — single-locale English message catalog (import-export-pivot,
  * openspec/changes/import-export-pivot/design.md, Architecture Decisions #12).
  *
- * Flat dotted keys, 12 namespaces: landing, auth, access, shell, orders,
- * catalog, customers, charges, settings, docs, partners, errors. Single
- * locale `en`; no provider/context machinery — consumers import `t()` from
- * './t'. Consumed by PR2 (landing), PR7a (auth, access, orders, catalog);
- * shell/customers/charges/settings are the remaining app-shell sweep
- * targets (Phase 7b), docs/partners land with Phases 3–6.
+ * Flat dotted keys, 15 namespaces: landing, auth, access, shell, orders,
+ * catalog, customers, charges, settings, funds, country, approval, docs,
+ * partners, errors. Single locale `en`; no provider/context machinery —
+ * consumers import `t()` from './t'. Consumed by PR2 (landing), PR7a
+ * (auth, access, orders, catalog), PR7b (shell, customers, charges,
+ * settings, funds, country, approval); docs/partners land with Phases 3–6.
  *
  * `satisfies` (not a `Record<string, string>` annotation) keeps the literal
  * key union so `t()` can type its parameter as `keyof typeof en` without a
  * circular import (en.ts never imports from t.ts). Conventions: one stem per
- * concept (`login`/`register`, never `signin`/`createAccount`) and error keys
- * as `<ns>.error.<verb>` (e.g. catalog.error.save).
+ * concept (`login`/`register`, never `signin`/`createAccount`); error keys
+ * use `<ns>.error.<verb>` (e.g. catalog.error.save). `auth.error.*` plus a
+ * few `funds.error.*`/`approval.error.*` keys use noun stems (legacy/
+ * semantic, mirroring Supabase auth-error and chain names) — do not add new
+ * noun stems.
  */
 
 export const en = {
@@ -129,14 +132,15 @@ export const en = {
   'access.error.validateName': 'Tell us your name.',
   'access.error.validateBusinessName': 'Tell us your business name.',
   'access.error.emailRequired': 'We need your email to reach you.',
-  'access.error.validateEmail': "That email doesn't look valid.",
+  // access.error.validateEmail removed in task 7.3: identical copy lived in
+  // two stems; errors.invalidEmail is the canonical one (AccessRequestForm).
   'access.error.selectCountry': 'Select your country.',
   'access.error.selectVolume': 'Select a monthly volume range.',
   'access.error.configMissing':
     'The form is not connected yet (the 005 migration is not applied in Supabase). Try again later.',
   'access.error.send': 'Your request could not be sent. Check your connection and try again.',
 
-  // ── shell ────────────────────────────────────────────────────────────────
+  // ── shell (PR7b — Shell.tsx consumers) ───────────────────────────────────
   'shell.nav.orders': 'Orders',
   'shell.nav.catalog': 'Catalog',
   'shell.nav.customers': 'Customers',
@@ -146,6 +150,7 @@ export const en = {
   'shell.balance': 'Balance',
   'shell.logout': 'Sign out',
   'shell.close': 'Close',
+  'shell.sendWithdrawFunds': 'Send / withdraw funds',
 
   // ── orders ───────────────────────────────────────────────────────────────
   'orders.new': 'New order',
@@ -187,7 +192,7 @@ export const en = {
   'orders.customer.modeSaved': 'Saved',
   'orders.customer.modeNew': 'New',
   'orders.customer.loading': 'Loading customers…',
-  'orders.customer.repeat': 'Repeat',
+  // orders.customer.repeat removed in task 7.3: dead key (no consumer).
   'orders.customer.change': 'Change',
   'orders.customer.frequent': 'Regular',
   'orders.customer.searchPlaceholder': 'Search by name, WhatsApp, {doc} or email…',
@@ -218,7 +223,8 @@ export const en = {
   'orders.noResults': 'No results',
   'orders.clearFilters': 'Clear filters',
   'orders.detail': 'Details',
-  'orders.generatePaymentLink': 'Generate payment link',
+  // orders.generatePaymentLink removed in task 7.3: duplicate of
+  // charges.generateLink (one stem per concept) — OrdersView uses that one.
   'orders.sendWhatsapp': 'Send WA',
   'orders.markingPaid': 'Marking…',
   'orders.markPaid': 'Mark as paid',
@@ -268,7 +274,8 @@ export const en = {
   'catalog.cancel': 'Cancel',
   'catalog.delete': 'Delete',
   'catalog.rateLoading': 'loading rate…',
-  'catalog.approxLoading': 'calculating equivalent…',
+  // catalog.approxLoading removed in task 7.3: duplicate of
+  // charges.equivalent (one stem per concept) — CatalogView uses that one.
   'catalog.stockUnit': 'ea.',
   'catalog.loading': 'Loading catalog…',
   'catalog.emptyHint': 'Add your first product to get started.',
@@ -284,7 +291,7 @@ export const en = {
   'catalog.error.validateName': 'The product name is required.',
   'catalog.error.updateStock': 'The stock could not be updated.',
 
-  // ── customers ────────────────────────────────────────────────────────────
+  // ── customers (PR7b — CustomersView consumers) ───────────────────────────
   'customers.new': 'New customer',
   'customers.edit': 'Edit customer',
   'customers.delete': 'Delete customer',
@@ -293,14 +300,48 @@ export const en = {
   'customers.empty': 'No saved customers yet',
   'customers.nameRequired': 'Customer name is required.',
   'customers.saveChanges': 'Save changes',
+  // saveError/deleteError left in place (unused): store failures are shown
+  // through storeErrorMessage → errors.store.* (task 7.3), not these stems.
   'customers.saveError': 'The customer could not be saved.',
   'customers.deleteError': 'The customer could not be deleted.',
-  'customers.searchPlaceholder': 'Search by name, phone, tax ID or email…',
+  'customers.searchPlaceholder': 'Search by name, WhatsApp, {doc} or email…',
+  'customers.searchDocFallback': 'tax ID',
+  'customers.error.validateTaxId': 'The {label} format is not valid. E.g. {example}',
+  'customers.field.name': 'Full name or legal entity *',
+  'customers.field.namePlaceholder': 'e.g. Central Trading Co',
+  'customers.field.phone': 'WhatsApp / Phone',
+  'customers.field.taxIdFallback': 'Tax ID',
+  'customers.field.taxIdPlaceholderFallback': 'Tax ID number',
+  'customers.field.emailPlaceholder': 'customer@email.com',
+  'customers.field.address': 'Address',
+  'customers.field.addressPlaceholder': 'Main Ave, {city}',
+  'customers.field.notes': 'Internal notes',
+  'customers.field.notesPlaceholder': 'Payment terms, delivery schedule…',
+  'customers.optional': '(optional)',
+  'customers.cancel': 'Cancel',
+  'customers.saving': 'Saving…',
+  'customers.add': 'Add customer',
+  'customers.frequent': 'Regular',
+  'customers.countOne': '{count} order',
+  'customers.countMany': '{count} orders',
+  'customers.newOrder': 'New order',
+  'customers.registeredOne': '{count} customer registered',
+  'customers.registeredMany': '{count} customers registered',
+  'customers.addFirst': 'Add your first customer',
+  'customers.emptyHint':
+    'Customers are saved automatically when you create orders — or add them here with their contact and billing details.',
+  'customers.noResults': 'No customers match “{query}”',
+  'customers.noResultsHint': 'Check the name, WhatsApp number or tax ID you entered.',
+  'customers.clearSearch': 'Clear search',
+  'customers.createNew': '+ Create new customer',
+  'customers.confirmDeleteYes': 'Yes, delete',
 
-  // ── charges ──────────────────────────────────────────────────────────────
+  // ── charges (PR7b — ChargesView consumers) ───────────────────────────────
   'charges.quick': 'Quick charge',
   'charges.history': 'Charge history',
   'charges.generateLink': 'Generate payment link',
+  // linkError left in place (unused): store failures are shown through
+  // storeErrorMessage → errors.store.* (task 7.3), not this stem.
   'charges.linkError': 'The payment link could not be generated.',
   'charges.descriptionPlaceholder': 'Description (e.g. Order #123, Consultation)',
   'charges.walletTarget': 'Destination wallet',
@@ -308,13 +349,22 @@ export const en = {
   'charges.shareWhatsapp': 'Share on WhatsApp',
   'charges.rateLoading': 'loading rate…',
   'charges.equivalent': 'calculating equivalent…',
+  'charges.copied': 'Copied',
+  'charges.copy': 'Copy',
+  'charges.generating': 'Generating…',
+  'charges.open': 'Open',
+  'charges.whatsappMessage':
+    'Hi! Here is the payment link for ${amount} USDC{memo}:\n\n{link}',
 
-  // ── settings ─────────────────────────────────────────────────────────────
+  // ── settings (PR7b — SettingsView consumers) ─────────────────────────────
   'settings.save': 'Save settings',
   'settings.saved': 'Settings saved',
   'settings.saving': 'Saving…',
+  // saveError left in place (unused): store failures are shown through
+  // storeErrorMessage → errors.store.* (task 7.3), not this stem.
   'settings.saveError': 'Settings could not be saved.',
   'settings.saveBank': 'Save bank details',
+  'settings.bankSaved': 'Saved',
   'settings.businessData': 'Business details',
   'settings.bankData': 'Bank transfer details',
   'settings.billing': 'Billing',
@@ -324,6 +374,70 @@ export const en = {
   'settings.wallet': 'Collection wallet',
   'settings.businessName': 'Business name',
   'settings.igtf': 'Apply 3% IGTF',
+  'settings.loading': 'Loading settings…',
+  'settings.businessNamePlaceholder': 'My Business',
+  'settings.field.phone': 'Phone',
+  'settings.field.email': 'Email',
+  'settings.field.emailPlaceholder': 'info@yourbusiness.com',
+  'settings.field.bank': 'Bank',
+  'settings.priceCurrencyHint':
+    'Catalog and Charges open in this currency. Every charge settles in USDC.',
+  'settings.pricingAuto': 'Automatic ({currency})',
+  'settings.bankDataHint':
+    'They appear on your payment links so the client can transfer. Leave them empty to hide that option.',
+  'settings.fiscalData': 'Fiscal data — {country}',
+  'settings.fiscalUnavailable':
+    'Local invoicing is not yet available for your country. We are enabling new countries progressively.',
+  'settings.fiscalUnavailableHint':
+    'In the meantime you can charge in USDC and share payment links as usual.',
+  'settings.fiscalCountry': 'Fiscal country',
+  'settings.taxIdFallback': 'Tax ID',
+  'settings.taxModuleHint':
+    'The {country} invoicing module calculates taxes automatically. Your {taxIdLabel} appears on every issued invoice.',
+  'settings.igtfHint': 'Tax on foreign-currency (USDC) payments',
+  'settings.walletActiveAddress': 'Active address',
+  'settings.walletCustodyHint':
+    'This is your own address: charges go straight to your wallet on Arc Testnet. Treazury never custodies your funds.',
+  'settings.error.requireTaxId': 'Your {taxIdLabel} is required to issue valid invoices{country}.',
+  'settings.error.validateTaxId': 'The format does not look valid. E.g. {example}',
+
+  // ── funds (PR7b — SendFundsDialog consumers) ─────────────────────────────
+  'funds.title': 'Send funds',
+  'funds.subtitle': 'USDC · Arc Testnet',
+  'funds.balance': 'Balance: {balance}',
+  'funds.recipient': 'Destination address',
+  'funds.amount': 'Amount (USDC)',
+  'funds.send': 'Send USDC',
+  'funds.waitingSignature': 'Waiting for signature…',
+  'funds.confirming': 'Confirming on network…',
+  'funds.txSent': 'Transaction sent — view on explorer',
+  'funds.custodyHint':
+    'The transaction is signed on your device. Treazury never custodies your keys.',
+  'funds.error.walletNotFound': 'Embedded wallet not found. Sign out and sign in again.',
+  'funds.error.rejected': 'Signature cancelled.',
+  'funds.error.validateRecipient': 'Invalid EVM address.',
+  'funds.error.validateAmount': 'Invalid amount (max 6 decimals).',
+  'funds.error.insufficientBalance': 'Insufficient balance.',
+
+  // ── country (PR7b — CountrySetupModal + PendingApproval step 1) ──────────
+  'country.title': 'Where do you operate?',
+  'country.subtitle': 'Choose your country to set the local currency and fiscal preferences.',
+  'country.saving': 'Saving…',
+  'country.continue': 'Continue',
+
+  // ── approval (PR7b — PendingApproval step 2; not e2e-scannable, see
+  //    e2e/09-app-locale.spec.ts header for the harness limitation) ──────────
+  'approval.title': 'Request received',
+  'approval.pending': 'Pending approval',
+  'approval.receivedPrefix': 'Your request for',
+  'approval.receivedSuffix': 'has been received. You will get a confirmation email at',
+  'approval.receivedTail': 'once your account is activated.',
+  'approval.earlyAccessNote':
+    'Treazury is in early access. We are activating accounts gradually to keep service quality high.',
+  'approval.retrying': 'Retrying…',
+  'approval.retry': 'Retry',
+  'approval.error.saveCountry': 'The country could not be saved. Try again.',
+  'approval.error.network': 'Connection error. Try again.',
 
   // ── docs (commercial documents — Phase 3/4 consumers) ────────────────────
   'docs.title': 'Commercial documents',
@@ -368,7 +482,7 @@ export const en = {
   'errors.store.rls_denied': 'Permission denied: your tenant is not yet approved to write to this table.',
   'errors.store.not_found': 'This record no longer exists.',
   'errors.store.unique_violation': 'That value is already in use.',
-  'errors.store.conflict': 'The database rejected the change.',
+  'errors.store.conflict': 'The change was rejected or only partially applied.',
   'errors.store.insufficient_stock': 'Not enough stock.',
   'errors.store.network': 'Could not reach the server.',
   'errors.store.unsupported': 'Operation not supported yet.',

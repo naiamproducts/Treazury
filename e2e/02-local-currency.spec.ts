@@ -5,8 +5,9 @@ test.describe('Tramo B — Moneda local visible', () => {
   test('Cobros muestra equivalente ARS al escribir monto', async ({ page }) => {
     await mockFx(page)
     await login(page)
-    await page.getByRole('button', { name: 'Cobros' }).click()
-    await expect(page.getByText('Cobro rápido')).toBeVisible()
+    // Nav + view copy: dual-language selectors across the Phase 7b sweep (task 7.3).
+    await page.getByRole('button', { name: /cobros|charges/i }).click()
+    await expect(page.getByText(/cobro rápido|quick charge/i)).toBeVisible()
     const amountInput = page.locator('input[inputmode="decimal"]')
     await amountInput.fill('10')
     await expect(page.getByText(/≈/)).toBeVisible({ timeout: 10_000 })
@@ -15,7 +16,7 @@ test.describe('Tramo B — Moneda local visible', () => {
   test('Catálogo muestra precio con equivalente ARS', async ({ page }) => {
     await mockFx(page)
     await login(page)
-    await page.getByRole('button', { name: 'Catálogo' }).click()
+    await page.getByRole('button', { name: /catálogo|catalog/i }).click()
     await page.getByRole('button', { name: /new product/i }).click()
     await page.getByPlaceholder(/product name/i).fill('Producto Test E2E')
     const priceInput = page.locator('input[inputmode="decimal"]').first()
@@ -26,7 +27,7 @@ test.describe('Tramo B — Moneda local visible', () => {
   test('Órdenes abre el form de nueva orden', async ({ page }) => {
     await mockFx(page)
     await login(page)
-    await expect(page.getByRole('heading', { name: 'Órdenes' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /órdenes|orders/i })).toBeVisible()
     await page.getByRole('button', { name: /new order/i }).click()
     // The form opens with customer selection fields
     await expect(page.getByText(/customer|buyer name/i).first()).toBeVisible({ timeout: 10_000 })
@@ -36,7 +37,7 @@ test.describe('Tramo B — Moneda local visible', () => {
   test('Nueva orden usa datos del país (AR), no de Venezuela', async ({ page }) => {
     await mockFx(page)
     await login(page)
-    await expect(page.getByRole('heading', { name: 'Órdenes' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /órdenes|orders/i })).toBeVisible()
     await page.getByRole('button', { name: /new order/i }).click()
     await expect(page.getByText(/buyer name|customer/i).first()).toBeVisible({ timeout: 10_000 })
     // AR account: generic fiscal ID label, no RIF; AR phone/address examples
@@ -51,12 +52,12 @@ test.describe('Tramo B — Moneda local visible', () => {
   test('Preferencia de moneda: se elige una vez y queda en Cobros', async ({ page }) => {
     await mockFx(page)
     await login(page)
-    await page.getByRole('button', { name: 'Configuración' }).click()
-    await expect(page.getByText('Moneda para cargar precios')).toBeVisible({ timeout: 10_000 })
+    await page.getByRole('button', { name: /configuración|settings/i }).click()
+    await expect(page.getByText(/moneda para cargar precios|currency for prices/i)).toBeVisible({ timeout: 10_000 })
     // Pick ARS explicitly (mock rate: venta 1450)
     await page.getByRole('button', { name: 'ARS', exact: true }).click()
-    await page.getByRole('button', { name: 'Cobros' }).click()
-    await expect(page.getByText('Cobro rápido')).toBeVisible()
+    await page.getByRole('button', { name: /cobros|charges/i }).click()
+    await expect(page.getByText(/cobro rápido|quick charge/i)).toBeVisible()
     const amountInput = page.locator('input[inputmode="decimal"]')
     await amountInput.fill('1450')
     // Local mode shows the USDC equivalent: 1450 ARS / 1450 = $1.00 USDC

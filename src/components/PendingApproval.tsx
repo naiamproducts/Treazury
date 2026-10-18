@@ -16,6 +16,7 @@ import { useState } from 'react'
 import { AlertCircle, Clock, LogOut, MessageSquare, ArrowRight, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { SUPPORTED_COUNTRIES, currencyForCountry } from '../lib/currency'
+import { t } from '../i18n/t'
 
 const STORAGE_PREFIX = 'paystyle:country-confirmed:'
 
@@ -70,13 +71,13 @@ export default function PendingApproval({
         .update({ country: selected })
         .eq('id', tenantId)
       if (error) {
-        setSaveError('No se pudo guardar el país. Intentá de nuevo.')
+        setSaveError(t('approval.error.saveCountry'))
         return
       }
       markCountryConfirmed(tenantId)
       setStep('waiting')
     } catch {
-      setSaveError('Error de conexión. Intentá de nuevo.')
+      setSaveError(t('approval.error.network'))
     } finally {
       setSaving(false)
     }
@@ -100,12 +101,13 @@ export default function PendingApproval({
           <>
             {/* ── Step 1: Country selection ── */}
             <h1 className="font-serif text-2xl font-medium text-white">
-              ¿Dónde operás?
+              {t('country.title')}
             </h1>
             <p className="mt-2 text-sm text-slate-400">
-              Elegí tu país para configurar la moneda local y las preferencias fiscales.
+              {t('country.subtitle')}
             </p>
 
+            {/* Option names/flags/currencies are SUPPORTED_COUNTRIES data. */}
             <div className="mt-5 space-y-2 text-left">
               {SUPPORTED_COUNTRIES.map(c => (
                 <button
@@ -136,8 +138,8 @@ export default function PendingApproval({
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 font-mono text-xs font-medium uppercase tracking-wider text-black transition-all hover:bg-slate-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 shadow-[0_0_30px_rgba(255,255,255,0.25)]"
             >
               {saving
-                ? <><Loader2 className="size-4 animate-spin" /> Guardando…</>
-                : <><ArrowRight className="size-4" /> Continuar</>
+                ? <><Loader2 className="size-4 animate-spin" /> {t('country.saving')}</>
+                : <><ArrowRight className="size-4" /> {t('country.continue')}</>
               }
             </button>
           </>
@@ -145,24 +147,22 @@ export default function PendingApproval({
           <>
             {/* ── Step 2: Pending approval ── */}
             <h1 className="font-serif text-2xl font-medium text-white">
-              Solicitud recibida
+              {t('approval.title')}
             </h1>
 
             <div className="mx-auto mt-4 flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3">
               <Clock className="size-4 shrink-0 text-amber-300" />
               <p className="text-sm text-amber-200">
-                Pendiente de aprobación
+                {t('approval.pending')}
               </p>
             </div>
 
             <p className="mt-4 text-sm text-slate-300">
-              Tu solicitud para <strong className="text-white">{businessName}</strong> fue recibida.
-              Recibirás un correo en <strong className="text-white">{email}</strong> cuando tu cuenta sea activada.
+              {t('approval.receivedPrefix')} <strong className="text-white">{businessName}</strong> {t('approval.receivedSuffix')} <strong className="text-white">{email}</strong> {t('approval.receivedTail')}
             </p>
 
             <p className="mt-3 text-xs text-slate-500">
-              Treazury está en acceso anticipado. Estamos activando cuentas gradualmente
-              para garantizar la calidad del servicio.
+              {t('approval.earlyAccessNote')}
             </p>
           </>
         )}
@@ -178,7 +178,7 @@ export default function PendingApproval({
                 disabled={walletRetrying === true}
                 className="ml-auto shrink-0 text-xs font-medium underline hover:text-white disabled:opacity-50"
               >
-                {walletRetrying === true ? 'Reintentando…' : 'Reintentar'}
+                {walletRetrying === true ? t('approval.retrying') : t('approval.retry')}
               </button>
             ) : null}
           </div>
@@ -189,7 +189,7 @@ export default function PendingApproval({
           className="mt-6 flex w-full items-center justify-center gap-2 text-center font-mono text-xs tracking-wider text-slate-400 transition-colors hover:text-white"
         >
           <LogOut className="size-4" />
-          Cerrar sesión
+          {t('shell.logout')}
         </button>
       </div>
     </div>

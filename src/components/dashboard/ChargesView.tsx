@@ -11,6 +11,8 @@ import type { DashboardStore } from '@/store'
 import type { Charge } from '@/sdk'
 import { createPayStyleSDK } from '@/sdk'
 import { currencyForCountry, fetchUsdRate, formatLocal, readPricingPref, writePricingPref, resolveEntryCurrency, readBankDetails } from '@/lib/currency'
+import { t } from '@/i18n/t'
+import { storeErrorMessage } from './CatalogView'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -23,14 +25,14 @@ function CopyButton({ text }: { text: string }) {
       style={{ background: 'var(--surface-muted)', color: copied ? 'var(--success)' : 'var(--ink-2)', border: '1px solid var(--border)' }}
     >
       {copied ? <CheckCheck className="size-3.5" /> : <Copy className="size-3.5" />}
-      {copied ? 'Copiado' : 'Copiar'}
+      {copied ? t('charges.copied') : t('charges.copy')}
     </button>
   )
 }
 
 function whatsAppUrl(link: string, amount: string, memo: string) {
   const text = encodeURIComponent(
-    `Hola! Te comparto el link de pago por $${amount} USDC${memo ? ` — ${memo}` : ''}:\n\n${link}`
+    t('charges.whatsappMessage', { amount, memo: memo ? ` — ${memo}` : '', link })
   )
   return `https://wa.me/?text=${text}`
 }
@@ -100,7 +102,8 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
       setAmount('')
       setMemo('')
     }).catch((err: unknown) => {
-      setGenError(err instanceof Error ? err.message : 'No se pudo generar el link de pago.')
+      // StoreError.message is Spanish — map the code to errors.store.* (task 7.3).
+      setGenError(storeErrorMessage(err))
     }).finally(() => {
       setGenerating(false)
     })
@@ -111,12 +114,12 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
       {/* Wallet chip */}
       <div className="flex items-center justify-between rounded-2xl px-4 py-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div>
-          <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Wallet destino</p>
+          <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('charges.walletTarget')}</p>
           <p className="mono mt-0.5 text-xs" style={{ color: 'var(--ink-2)' }}>
             {store.merchantAddress.slice(0, 10)}…{store.merchantAddress.slice(-8)}
           </p>
         </div>
-        <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)' }}>Activa</span>
+        <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)' }}>{t('charges.active')}</span>
       </div>
 
       {/* Amount + memo */}
@@ -124,7 +127,7 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
         <div className="treazury-strip" />
         <div className="p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Cobro rápido</p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{t('charges.quick')}</p>
             {localCurrency !== 'USD' && (
               <div className="flex overflow-hidden rounded-lg text-[11px] font-semibold" style={{ border: '1px solid var(--border)' }}>
                 <button
@@ -141,7 +144,7 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
                   className="px-2 py-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ background: amountCurrency === 'local' ? 'var(--accent)' : 'var(--surface)', color: amountCurrency === 'local' ? '#fff' : 'var(--muted)' }}
                 >{localCurrency}</button>
-                {fxRate === null && <span className="px-2 py-0.5 text-[10px]" style={{ color: 'var(--subtle)' }}>cargando tasa…</span>}
+                {fxRate === null && <span className="px-2 py-0.5 text-[10px]" style={{ color: 'var(--subtle)' }}>{t('charges.rateLoading')}</span>}
               </div>
             )}
           </div>
@@ -195,7 +198,7 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
             type="text"
             value={memo}
             onChange={e => setMemo(e.target.value)}
-            placeholder="Descripción (ej: Pedido #123, Consulta)"
+            placeholder={t('charges.descriptionPlaceholder')}
             maxLength={80}
             className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
             style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }}
@@ -211,7 +214,7 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
             className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-all hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-40"
             style={{ background: 'var(--accent)' }}
           >
-            <Plus className="size-4" /> {generating ? 'Generando…' : 'Generar link de pago'}
+            <Plus className="size-4" /> {generating ? t('charges.generating') : t('charges.generateLink')}
           </button>
         </div>
       </div>
@@ -238,9 +241,11 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
                     return local ? <span className="ml-2 text-xs font-normal" style={{ color: 'var(--muted)' }}>≈ {local}</span> : null
                   })()}
                 </span>
-                {lastCharge.memo && <span className="text-xs" style={{ color: 'var(--muted)' }}>{lastCharge.memo}</span>}
+                {/* Stored charge data (memo, payment URL) — i18n-scan
+                    exemption, marked per-node (e2e/09 case). */}
+                {lastCharge.memo && <span className="text-xs" style={{ color: 'var(--muted)' }} data-purpose="stored-data">{lastCharge.memo}</span>}
               </div>
-              <div className="mb-3 overflow-hidden rounded-xl px-3 py-2.5 text-xs font-mono break-all" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}>
+              <div className="mb-3 overflow-hidden rounded-xl px-3 py-2.5 text-xs font-mono break-all" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink-2)' }} data-purpose="stored-data">
                 {lastCharge.paymentUrl}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -259,7 +264,7 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
                   className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all hover:scale-[1.02]"
                   style={{ background: 'var(--surface-muted)', color: 'var(--ink-2)', border: '1px solid var(--border)' }}
                 >
-                  <ExternalLink className="size-3.5" /> Abrir
+                  <ExternalLink className="size-3.5" /> {t('charges.open')}
                 </a>
               </div>
             </div>
@@ -267,11 +272,11 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
         )}
       </AnimatePresence>
 
-      {/* History */}
+      {/* History — stored memos are marked per-node data-purpose="stored-data" */}
       {charges.length > 1 && (
         <div className="overflow-hidden rounded-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="p-5">
-            <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--ink)' }}>Historial de cobros</p>
+            <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--ink)' }}>{t('charges.history')}</p>
             <div className="space-y-2">
               {charges.slice(1).map(c => (
                 <div key={c.id} className="flex items-center justify-between rounded-2xl px-4 py-3" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
@@ -282,7 +287,7 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
                         const local = fmtLocal(parseFloat(c.amount))
                         return local ? <span className="ml-1.5 text-xs" style={{ color: 'var(--muted)' }}>≈ {local}</span> : null
                       })()}
-                      {c.memo && <span className="ml-1.5 font-normal" style={{ color: 'var(--muted)' }}>· {c.memo}</span>}
+                      {c.memo && <span className="ml-1.5 font-normal" style={{ color: 'var(--muted)' }} data-purpose="stored-data">· {c.memo}</span>}
                     </p>
                     <p className="mono mt-0.5 text-xs" style={{ color: 'var(--subtle)' }}>{new Date(c.createdAt).toLocaleTimeString()}</p>
                   </div>

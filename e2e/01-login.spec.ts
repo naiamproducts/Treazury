@@ -4,16 +4,18 @@ import { login } from './helpers'
 test.describe('Tramo A — Login + Dashboard', () => {
   test('login shows dashboard with sidebar', async ({ page }) => {
     await login(page)
-    await expect(page.getByRole('button', { name: 'Órdenes' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Catálogo' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Clientes/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Cobros' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Configuración' })).toBeVisible()
+    // Sidebar nav labels: dual-language selectors so this test tracks the
+    // Phase 7b Shell sweep (task 7.3) without blocking on it.
+    await expect(page.getByRole('button', { name: /órdenes|orders/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /catálogo|catalog/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /clientes|customers/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /cobros|charges/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /configuración|settings/i })).toBeVisible()
   })
 
-  test('dashboard default view is Órdenes', async ({ page }) => {
+  test('dashboard default view is Órdenes/Orders', async ({ page }) => {
     await login(page)
-    await expect(page.getByRole('heading', { name: 'Órdenes' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /órdenes|orders/i })).toBeVisible()
     await expect(page.getByText('No orders yet')).toBeVisible()
   })
 

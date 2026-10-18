@@ -87,9 +87,9 @@ Chain strategy: pending
 
 ## Phase 7: App-Shell EN Sweep (PR 7a → 7b; largest slice)
 
-- [x] 7.1 (7a) RED: write `e2e/09-app-locale.spec.ts` — active locale `en` (I18N-R1S2), spot-check rendered views contain no Spanish (I18N-R1S1).
+- [x] 7.1 (7a) RED: write `e2e/09-app-locale.spec.ts` — active locale `en` (I18N-R1S2), spot-check rendered views contain no Spanish (I18N-R1S1). **EARLY R4: the spec also carries the I18N-R4 English-error tests (CatalogView + OrdersView in 7a; CustomersView + SendFundsDialog added in 7b) — R4 coverage lands here, exercised fully at 7.3.**
 - [x] 7.2 (7a) GREEN: sweep heaviest files into `t()` — `OrdersView.tsx` (~27), `AuthPage.tsx` (~14), `AccessRequestForm.tsx` (~14), `CatalogView.tsx` (~14).
-- [ ] 7.3 (7b) GREEN: remaining dashboard views + `errors` namespace — invalid form shows English error (I18N-R4). **GUARDRAIL: `venezuela.ts` untouched — verify `git diff --stat -- src/modules/invoicing/` is empty.**
+- [x] 7.3 (7b) GREEN: remaining dashboard views + `errors` namespace — swept `Shell`, `ChargesView`, `CustomersView`, `SettingsView`, `SendFundsDialog`, `CountrySetupModal`, `PendingApproval` to `t()` (namespaces `shell/charges/customers/settings/funds/country/approval`); migrated the 6 Spanish `err.message` catch sites + Shell's `store.error` banner to `storeErrorMessage` (`errors.store.*`); consolidated duplicates (`access.error.validateEmail`→`errors.invalidEmail`, `orders.generatePaymentLink`→`charges.generateLink`, `catalog.approxLoading`→`charges.equivalent`, dead `orders.customer.repeat` removed); stored-data scan exemptions (`customer-cards`, `charge-result`, `charge-history`, `country-options`, `country-data-field`); invalid form shows English error (I18N-R4). **GUARDRAIL: `venezuela.ts` untouched — verify `git diff --stat -- src/modules/invoicing/` is empty.**
 - [ ] 7.4 Final verification: `bun run check`, `bunx playwright test e2e/`, `forge test` (must stay untouched/pass), grep spot-check for residual Spanish outside `venezuela.ts` + fiscal snapshots.
   SPLIT OPTION: 7a (~90 strings) and 7b (~60 strings + errors) ship as separate PRs if either >800 lines.
 

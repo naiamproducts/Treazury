@@ -810,7 +810,7 @@ function OrderCard({ order, store, tenantId }: { order: Order; store: DashboardS
             className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition-all hover:scale-[1.02]"
             style={{ background: 'var(--accent)' }}
           >
-            <ExternalLink className="size-3.5" /> {t('orders.generatePaymentLink')}
+            <ExternalLink className="size-3.5" /> {t('charges.generateLink')}
           </button>
         )}
 
