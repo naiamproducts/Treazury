@@ -41,10 +41,10 @@ Chain strategy: pending
 
 ## Phase 2: i18n Skeleton + EN Landing (PR 2 — independent)
 
-- [ ] 2.1 Create `src/i18n/{en.ts,t.ts}`: flat dotted catalog (~150 keys, 11 namespaces), pure `t(key, vars?)`. Accept: I18N-R2 foundation. Verify: `bun run check`.
-- [ ] 2.2 RED: write `e2e/04-landing-en.spec.ts` — English agency hero (L-R1), SWIFT-vs-USDC contrast on speed/cost/visibility (L-R2), payment→document-release statement (L-R3), no Spanish + locale `en` (L-R4, I18N-R1).
-- [ ] 2.3 GREEN: rewrite `src/components/LandingPage.tsx` EN agency copy (luxe-dark tokens), remove WhatsApp/Vendify; `index.html` `lang="en"` + EN title/OG (I18N-R3). **GUARDRAIL: `src/modules/invoicing/engines/venezuela.ts` Spanish fiscal HTML stays UNTOUCHED — guardrail outranks i18n.**
-- [ ] 2.4 Update `DESIGN.md` §0 language rule Spanish→English. Verify: `bunx playwright test e2e/04-landing-en.spec.ts`.
+- [x] 2.1 Create `src/i18n/{en.ts,t.ts}`: flat dotted catalog (~150 keys, 11 namespaces), pure `t(key, vars?)`. Accept: I18N-R2 foundation. Verify: `bun run check`.
+- [x] 2.2 RED: write `e2e/04-landing-en.spec.ts` — English agency hero (L-R1), SWIFT-vs-USDC contrast on speed/cost/visibility (L-R2), payment→document-release statement (L-R3), no Spanish + locale `en` (L-R4 scoped, I18N-R1). **L-R4 SCOPE: scan covers landing-owned copy; `AccessRequestForm` Spanish remains deferred to 7.2 (deviation documented in the e2e header; full landing L-R4 acceptance at 7.4).**
+- [x] 2.3 GREEN: rewrite `src/components/LandingPage.tsx` EN agency copy (luxe-dark tokens), remove WhatsApp/Vendify; `index.html` `lang="en"` + EN title/OG (I18N-R3). **GUARDRAIL: `src/modules/invoicing/engines/venezuela.ts` Spanish fiscal HTML stays UNTOUCHED — guardrail outranks i18n.**
+- [x] 2.4 Update `DESIGN.md` §0 language rule Spanish→English. Verify: `bunx playwright test e2e/04-landing-en.spec.ts`.
 
 ## Phase 3: Draft Gen + Doc Editor (PR 3a → 3b; largest slice)
 

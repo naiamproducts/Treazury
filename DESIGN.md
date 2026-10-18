@@ -8,13 +8,24 @@ document wins; fix the code (alignment only — no redesigns).
 
 - **Code, comments, identifiers: ENGLISH.** Component names, props,
   localStorage keys, console prefixes, env vars, SDK classes stay in English.
-- **All USER-FACING copy: SPANISH (rioplatense voseo).** Every surface —
-  including the marketing landing — renders Spanish strings only: "Elegí",
-  "operás", "Recibirás", "Cerrar sesión". Warm, direct, no slang overload.
+- **All USER-FACING copy: ENGLISH (single locale `en`).** Every surface —
+  including the marketing landing — renders English strings sourced from the
+  i18n catalog (`src/i18n/en.ts` via the pure `t()` helper). Landing ships
+  English first (import-export-pivot, 2026-10-17); the app-shell sweep
+  migrates the remaining dashboard strings file-by-file. No Spanish UI copy
+  may remain when the sweep completes.
+- **Fiscal document exception:** generated fiscal invoice HTML
+  (`src/modules/invoicing/engines/venezuela.ts`) is legal print output, not
+  app UI — it stays Spanish (guardrail outranks i18n).
+- **Deferred exception (app-shell sweep):** the access-request form in the
+  landing hero (`src/components/AccessRequestForm.tsx`) still renders Spanish
+  copy until the app-shell sweep (import-export-pivot task 7.2); until then
+  the landing no-Spanish scan (`e2e/04-landing-en.spec.ts`) scopes to
+  landing-owned copy, and full landing L-R4 acceptance lands at task 7.4.
 - **Proper nouns and technical terms stay as-is:** Treazury, USDC, WhatsApp,
   B2B, TRC20/Polygon/Arbitrum, country names/flags, numbers.
-- `index.html` follows the same rule: `<html lang="es">` plus a Spanish
-  `<title>`.
+- `index.html` follows the same rule: `<html lang="en">` plus an English
+  `<title>` and OpenGraph tags.
 
 ## 1. Tokens
 

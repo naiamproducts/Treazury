@@ -1,27 +1,54 @@
 /**
  * Treazury — Landing Page (luxe-editorial dark style).
  *
- * React port of the Treazury design brief. CTA buttons call onEnterApp,
+ * English agency-facing copy for import/export agencies (import-export-pivot):
+ * SWIFT-vs-USDC storytelling and the payment→document-release proposition.
+ * All user-facing strings are sourced from the i18n catalog via t()
+ * (src/i18n/en.ts) — no hardcoded copy literals. CTA buttons call onEnterApp,
  * which routes into the app auth flow (App stage 'landing' -> 'auth').
- * The hero card hosts the access-request form (AccessRequestForm), which
- * saves to Supabase. Copy claims only verified product capabilities:
- * catalog with stock, orders, payment links/charges, multi-currency
- * display, USDC settlement to the merchant wallet, approval-gated
- * accounts.
+ * The hero card hosts the access-request form (AccessRequestForm); that
+ * component keeps its own strings until the app-shell EN sweep (Phase 7).
  */
 
 import { useState } from 'react'
 import AccessRequestForm from './AccessRequestForm'
+import { t } from '../i18n/t'
 
 interface LandingPageProps {
   onEnterApp: () => void
   showRegister: boolean
 }
 
+/** SWIFT vs USDC outcome rows (L-R2): speed, cost, visibility. */
+const OUTCOMES = [
+  {
+    label: t('landing.comparison.speed.label'),
+    swift: t('landing.comparison.speed.swift'),
+    usdc: t('landing.comparison.speed.usdc'),
+  },
+  {
+    label: t('landing.comparison.cost.label'),
+    swift: t('landing.comparison.cost.swift'),
+    usdc: t('landing.comparison.cost.usdc'),
+  },
+  {
+    label: t('landing.comparison.visibility.label'),
+    swift: t('landing.comparison.visibility.swift'),
+    usdc: t('landing.comparison.visibility.usdc'),
+  },
+]
+
+/** Order → payment → release flow steps (L-R3). */
+const FLOW_STEPS = [
+  t('landing.flow.step1'),
+  t('landing.flow.step2'),
+  t('landing.flow.step3'),
+]
+
 export default function LandingPage({ onEnterApp, showRegister }: LandingPageProps) {
   const [termsVisible, setTermsVisible] = useState(true)
 
-  const heroCtaLabel = showRegister ? 'Crear cuenta gratis' : 'Entrar al panel'
+  const heroCtaLabel = showRegister ? t('landing.hero.cta.register') : t('landing.hero.cta.login')
 
   return (
     <div className="luxe-landing min-h-screen font-sans selection:bg-white selection:text-black relative">
@@ -51,7 +78,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             onClick={onEnterApp}
             className="hidden sm:inline-block text-xs font-mono uppercase tracking-wider text-slate-300 hover:text-white transition-colors cursor-pointer"
           >
-            Ingresar
+            {t('landing.header.signin')}
           </button>
           <button
             type="button"
@@ -59,7 +86,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             className="relative group px-5 py-2.5 rounded-full text-xs font-mono tracking-wider text-white transition-all duration-300 border border-white/20 hover:border-white/50 bg-white/[0.04] hover:bg-white/[0.08] shadow-[0_0_15px_rgba(255,255,255,0.04)] hover:shadow-[0_0_20px_rgba(255,255,255,0.12)] cursor-pointer"
           >
             <span className="relative z-10 flex items-center gap-2">
-              Crear cuenta <span className="text-icyCyan transition-transform group-hover:translate-x-0.5">→</span>
+              {t('landing.header.createAccount')} <span className="text-icyCyan transition-transform group-hover:translate-x-0.5">→</span>
             </span>
           </button>
         </div>
@@ -77,15 +104,15 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             data-purpose="audience-badge"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-icyCyan mr-2.5 shadow-[0_0_6px_rgba(165,243,252,0.9)] animate-pulse"></span>
-            Para proveedores mayoristas B2B
+            {t('landing.hero.badge')}
           </div>
 
           <div className="relative w-full mb-7" data-purpose="headline-block">
             <h1 className="text-4xl sm:text-6xl xl:text-[4.2rem] font-serif font-light leading-[1.08] tracking-tight text-white">
-              Cobrá tus <br />
-              <span className="italic font-normal text-slate-100">pedidos mayoristas</span> <br />
+              {t('landing.hero.title.line1')} <br />
+              <span className="italic font-normal text-slate-100">{t('landing.hero.title.line2')}</span> <br />
               <span className="font-light tracking-normal bg-gradient-to-r from-white via-slate-200 to-cyan-200/90 bg-clip-text text-transparent">
-                en USDC al instante.
+                {t('landing.hero.title.line3')}
               </span>
             </h1>
             <div className="w-16 h-px bg-gradient-to-r from-cyan-400 to-transparent mt-6 opacity-60"></div>
@@ -95,9 +122,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-lg font-light tracking-wide mb-10"
             data-purpose="hero-subtitle"
           >
-            Treazury es tu panel mayorista: catálogo con stock, órdenes y links de pago en USDC que
-            liquidan directo a tu wallet. Precios en tu moneda local y cuentas activadas una por
-            una.
+            {t('landing.hero.subtitle')}
           </p>
 
           <div className="flex flex-wrap items-center gap-6 mb-11" data-purpose="cta-action-row">
@@ -114,19 +139,19 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             <div id="regiones" className="flex flex-wrap items-center gap-3 scroll-mt-24">
               <div className="passport-stamp px-3 py-1.5 rounded bg-white/[0.02] border-white/20 flex items-center gap-2">
                 <span className="text-xs">🇦🇷</span>
-                <span className="text-[11px] font-mono text-slate-200 font-semibold tracking-widest">ARGENTINA</span>
+                <span className="text-[11px] font-mono text-slate-200 font-semibold tracking-widest">{t('landing.hero.regions.argentina')}</span>
                 <span className="text-[9px] font-mono text-icyCyan border border-cyan-400/40 px-1 py-0.5 rounded-sm bg-cyan-950/40 font-semibold">
-                  LIVE
+                  {t('landing.hero.regions.live')}
                 </span>
               </div>
               <span className="text-[11px] font-mono text-slate-500 tracking-wider">
-                VE · MX · CO · CL en camino
+                {t('landing.hero.regions.upcoming')}
               </span>
               <a
                 className="text-[11px] font-mono text-slate-400 hover:text-white transition-colors tracking-wider underline decoration-white/20 underline-offset-4 flex items-center gap-1"
                 href="#solicitar-acceso"
               >
-                Solicitar acceso →
+                {t('landing.hero.regions.requestAccess')}
               </a>
             </div>
           </div>
@@ -136,18 +161,18 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             data-purpose="trust-metric-chips"
           >
             <div className="flex items-baseline space-x-2 font-mono">
-              <span className="text-lg font-light text-white">100%</span>
-              <span className="text-[11px] uppercase tracking-wider text-slate-400">Autocustodia</span>
+              <span className="text-lg font-light text-white">{t('landing.trust.custodyValue')}</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">{t('landing.trust.custodyLabel')}</span>
             </div>
             <div className="h-3 w-px bg-white/10"></div>
             <div className="flex items-baseline space-x-2 font-mono">
-              <span className="text-lg font-light text-cyan-300">USDC</span>
-              <span className="text-[11px] uppercase tracking-wider text-slate-400">Directo a tu wallet</span>
+              <span className="text-lg font-light text-cyan-300">{t('landing.trust.usdcValue')}</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">{t('landing.trust.usdcLabel')}</span>
             </div>
             <div className="h-3 w-px bg-white/10"></div>
             <div className="flex items-baseline space-x-2 font-mono">
-              <span className="text-lg font-light text-slate-200">5</span>
-              <span className="text-[11px] uppercase tracking-wider text-slate-400">Monedas locales</span>
+              <span className="text-lg font-light text-slate-200">{t('landing.trust.speedValue')}</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400">{t('landing.trust.speedLabel')}</span>
             </div>
           </div>
         </section>
@@ -170,7 +195,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             <div className="flex items-center justify-center gap-3 mb-4">
               <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent flex-1"></div>
               <span className="text-[10px] font-mono tracking-[0.3em] text-slate-400 uppercase flex items-center gap-2">
-                IMPULSADO POR LOS MEJORES
+                {t('landing.ticker.heading')}
               </span>
               <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent flex-1"></div>
             </div>
@@ -182,7 +207,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                     <path d="M12 6v12M8 10h8" stroke="currentColor" strokeLinecap="round" strokeWidth="2"></path>
                   </svg>
                   <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
-                    Circle (USDC)
+                    {t('landing.ticker.circle')}
                   </span>
                 </div>
                 <span className="text-slate-600 text-xs select-none">•</span>
@@ -200,7 +225,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                   </svg>
                   <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
-                    Privy
+                    {t('landing.ticker.privy')}
                   </span>
                 </div>
               </div>
@@ -208,6 +233,67 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
           </div>
         </section>
       </main>
+
+      {/* SWIFT vs USDC — outcome comparison (L-R2) */}
+      <section
+        className="relative z-10 max-w-7xl mx-auto px-6 lg:px-16 pb-14"
+        data-purpose="swift-usdc-comparison"
+      >
+        <h2 className="font-serif text-3xl sm:text-4xl font-light text-white mb-7">
+          {t('landing.comparison.heading')}
+        </h2>
+        <p className="text-sm font-light leading-relaxed text-slate-400 max-w-2xl mb-7">
+          {t('landing.comparison.subheading')}
+        </p>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
+          <div className="grid grid-cols-3 border-b border-white/10">
+            <div className="px-5 py-3.5 text-[10px] font-mono uppercase tracking-[0.2em] text-slate-500">
+              {t('landing.comparison.col.outcome')}
+            </div>
+            <div className="px-5 py-3.5 text-[10px] font-mono uppercase tracking-[0.2em] text-slate-400">
+              {t('landing.comparison.col.swift')}
+            </div>
+            <div className="px-5 py-3.5 text-[10px] font-mono uppercase tracking-[0.2em] text-icyCyan">
+              {t('landing.comparison.col.usdc')}
+            </div>
+          </div>
+          {OUTCOMES.map(outcome => (
+            <div key={outcome.label} className="grid grid-cols-3 border-b border-white/5 last:border-b-0">
+              <div className="px-5 py-4 text-xs font-mono uppercase tracking-wider text-slate-300">
+                {outcome.label}
+              </div>
+              <div className="px-5 py-4 text-sm font-light text-slate-400">{outcome.swift}</div>
+              <div className="px-5 py-4 text-sm font-light text-white">{outcome.usdc}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Payment → document release (L-R3) */}
+      <section
+        className="relative z-10 max-w-7xl mx-auto px-6 lg:px-16 pb-20"
+        data-purpose="payment-document-flow"
+      >
+        <h2 className="font-serif text-3xl sm:text-4xl font-light text-white mb-7">
+          {t('landing.flow.heading')}
+        </h2>
+        <ol className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
+          {FLOW_STEPS.map((step, index) => (
+            <li key={step} className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-5">
+              <span className="font-mono text-[11px] tracking-[0.25em] text-icyCyan">
+                {`0${index + 1}`}
+              </span>
+              <p className="mt-2 text-sm font-light text-slate-200 leading-relaxed">{step}</p>
+            </li>
+          ))}
+        </ol>
+        <p
+          className="max-w-3xl text-sm sm:text-base font-light leading-relaxed text-slate-400"
+          data-purpose="doc-release-statement"
+        >
+          {t('landing.flow.statement')}
+        </p>
+      </section>
 
       {/* Terms pill */}
       {termsVisible && (
@@ -219,16 +305,16 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-icyCyan animate-pulse"></div>
               <p className="text-xs text-slate-300 font-light leading-none">
-                Al usar Treazury, aceptás nuestros{' '}
+                {t('landing.terms.prefix')}{' '}
                 <a className="text-white underline decoration-white/40 hover:decoration-white font-medium" href="#terms">
-                  Términos
+                  {t('landing.terms.terms')}
                 </a>{' '}
-                y{' '}
+                {t('landing.terms.conjunction')}{' '}
                 <a
                   className="text-white underline decoration-white/40 hover:decoration-white font-medium"
                   href="#privacy"
                 >
-                  Privacidad
+                  {t('landing.terms.privacy')}
                 </a>
                 .
               </p>
@@ -239,11 +325,11 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                 onClick={() => setTermsVisible(false)}
                 className="px-3.5 py-1.5 rounded-full text-[11px] font-mono tracking-wider text-black bg-white hover:bg-slate-200 transition-all cursor-pointer font-medium"
               >
-                Entendido
+                {t('landing.terms.dismiss')}
               </button>
               <button
                 type="button"
-                aria-label="Descartar aviso de términos"
+                aria-label={t('landing.terms.dismissAria')}
                 onClick={() => setTermsVisible(false)}
                 className="text-slate-400 hover:text-white text-xs transition-colors cursor-pointer px-1"
               >
