@@ -1,6 +1,6 @@
 /**
- * OrdersView — crear pedidos desde el catálogo, asignar comprador (WhatsApp),
- * generar link de pago, ver estado y gestionar órdenes.
+ * OrdersView — create orders from the catalog, assign the buyer (WhatsApp),
+ * generate payment links, track status and manage orders.
  */
 
 import { useState, useEffect, useRef } from 'react'
@@ -15,6 +15,8 @@ import type { Customer, DashboardStore, Order, OrderLine } from '@/store'
 import { invoiceFactory } from '@/modules/invoicing/factory'
 import type { CountryCode } from '@/modules/shared/types'
 import { currencyForCountry, countryMeta, fetchUsdRate, formatLocal, readPricingPref, resolveEntryCurrency, readBankDetails } from '@/lib/currency'
+import { t } from '@/i18n/t'
+import { storeErrorMessage } from './CatalogView'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -44,11 +46,11 @@ function engineForCountry(country: CountryCode) {
 
 function statusLabel(s: Order['status']) {
   const map: Record<Order['status'], { label: string; bg: string; fg: string }> = {
-    draft:           { label: 'Borrador',         bg: 'rgba(18,45,69,0.07)', fg: 'var(--muted)' },
-    pending_payment: { label: 'Pago pendiente',   bg: 'rgba(217,119,6,0.1)', fg: '#b45309' },
-    partially_paid:  { label: 'Pago parcial',     bg: 'rgba(99,102,241,0.1)', fg: '#4f46e5' },
-    paid:            { label: 'Pagado',            bg: 'rgba(26,128,71,0.1)', fg: 'var(--success)' },
-    cancelled:       { label: 'Cancelado',         bg: 'rgba(186,43,76,0.08)', fg: 'var(--danger)' },
+    draft:           { label: t('orders.status.draft'),         bg: 'rgba(18,45,69,0.07)', fg: 'var(--muted)' },
+    pending_payment: { label: t('orders.status.pendingPayment'), bg: 'rgba(217,119,6,0.1)', fg: '#b45309' },
+    partially_paid:  { label: t('orders.status.partiallyPaid'),  bg: 'rgba(99,102,241,0.1)', fg: '#4f46e5' },
+    paid:            { label: t('orders.status.paid'),            bg: 'rgba(26,128,71,0.1)', fg: 'var(--success)' },
+    cancelled:       { label: t('orders.status.cancelled'),       bg: 'rgba(186,43,76,0.08)', fg: 'var(--danger)' },
   }
   return map[s]
 }
@@ -75,7 +77,7 @@ function CopyBtn({ text }: { text: string }) {
       style={{ background: 'var(--surface-muted)', color: copied ? 'var(--success)' : 'var(--muted)', border: '1px solid var(--border)' }}
     >
       {copied ? <CheckCheck className="size-3.5" /> : <Copy className="size-3.5" />}
-      {copied ? 'Copiado' : 'Copiar'}
+      {copied ? t('orders.copy.copied') : t('orders.copy.idle')}
     </button>
   )
 }
@@ -240,15 +242,15 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
   // Every store mutation is a network round trip now, so this is async: the
   // order row, its lines and the stock reservations are separate writes.
   const handleCreate = async () => {
-    if (!buyerName.trim()) { setError('El nombre del comprador es requerido.'); return }
+    if (!buyerName.trim()) { setError(t('orders.error.validateBuyerName')); return }
     // Only validate the buyer tax ID when the country has an invoicing
     // engine. Without one (AR, MX, …) the field is free text — validating an
     // Argentine CUIT against VE RIF rules would wrongly reject it.
     if (engine && buyerTaxId.trim() && !engine.validateBuyerTaxId(buyerTaxId.trim())) {
-      setError(`El ${engine.buyerTaxIdLabel} no tiene un formato válido. Ej: ${engine.buyerTaxIdExample}`)
+      setError(t('orders.error.validateTaxId', { label: engine.buyerTaxIdLabel, example: engine.buyerTaxIdExample }))
       return
     }
-    if (lines.length === 0) { setError('Agrega al menos un producto.'); return }
+    if (lines.length === 0) { setError(t('orders.error.addProduct')); return }
     setSaving(true)
     try {
       const order = await store.addOrder({
@@ -273,12 +275,12 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
         try {
           window.localStorage.setItem(LAST_CUSTOMER_KEY, linkedId)
         } catch {
-          // Sin almacenamiento local no hay cliente preferido; la orden igual se creó.
+          // No localStorage → no preferred buyer; the order was still created.
         }
       }
       await onCreated(order)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo crear la orden.')
+      setError(storeErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -291,12 +293,12 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
     <div className="overflow-hidden rounded-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
       <div className="treazury-strip" />
       <div className="p-5 space-y-4">
-        <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>Nueva orden</h3>
+        <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>{t('orders.new')}</h3>
 
         {/* Buyer — saved customer or new */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <label className="block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Cliente *</label>
+            <label className="block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('orders.customer.label')}</label>
             {store.customers.length > 0 && (
               <div className="flex gap-1 rounded-xl p-0.5" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
                 {(['saved', 'new'] as const).map(m => (
@@ -308,7 +310,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                       ? { background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--border)' }
                       : { color: 'var(--muted)', border: '1px solid transparent' }}
                   >
-                    {m === 'saved' ? 'Guardado' : 'Nuevo'}
+                    {m === 'saved' ? t('orders.customer.modeSaved') : t('orders.customer.modeNew')}
                   </button>
                 ))}
               </div>
@@ -316,7 +318,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
           </div>
 
           {store.customersLoading ? (
-            <p className="px-1 py-2 text-xs" style={{ color: 'var(--muted)' }}>Cargando clientes…</p>
+            <p className="px-1 py-2 text-xs" style={{ color: 'var(--muted)' }}>{t('orders.customer.loading')}</p>
           ) : mode === 'saved' && store.customers.length > 0 ? (
             <div className="space-y-2">
               {/* If a customer is selected and dropdown is closed, show selected summary */}
@@ -344,7 +346,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                             className="shrink-0 rounded-full px-1.5 py-0.2 text-[10px] font-semibold"
                             style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)' }}
                           >
-                            Habitual
+                            {t('orders.customer.frequent')}
                           </span>
                         )}
                       </div>
@@ -366,7 +368,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                       className="rounded-xl px-2.5 py-1 text-xs font-semibold transition-all hover:opacity-80"
                       style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--accent)' }}
                     >
-                      Cambiar
+                      {t('orders.customer.change')}
                     </button>
                   </div>
                 </div>
@@ -390,7 +392,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                         if (!dropdownOpen) setDropdownOpen(true)
                       }}
                       onFocus={() => setDropdownOpen(true)}
-                      placeholder={`Buscar por nombre, WhatsApp, ${engine ? engine.buyerTaxIdLabel : 'documento'} o email…`}
+                      placeholder={t('orders.customer.searchPlaceholder', { doc: engine ? engine.buyerTaxIdLabel : t('orders.customer.searchDocFallback') })}
                       autoComplete="off"
                     />
                     <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -435,7 +437,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                       >
                         {filteredCustomers.length === 0 ? (
                           <div className="p-3 text-center text-xs space-y-1.5" style={{ color: 'var(--muted)' }}>
-                            <p>Sin coincidencias para “{search}”</p>
+                            <p>{t('orders.customer.noMatches', { query: search })}</p>
                             <button
                               type="button"
                               onClick={() => {
@@ -447,7 +449,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                               style={{ color: 'var(--accent)' }}
                             >
                               <Plus className="size-3" />
-                              Usar como nuevo comprador
+                              {t('orders.customer.useAsNew')}
                             </button>
                           </div>
                         ) : (
@@ -472,7 +474,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                                           className="shrink-0 rounded-full px-1.5 py-0.2 text-[10px] font-semibold"
                                           style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)' }}
                                         >
-                                          Habitual
+                                          {t('orders.customer.frequent')}
                                         </span>
                                       )}
                                     </span>
@@ -501,7 +503,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                                 style={{ color: 'var(--accent)' }}
                               >
                                 <Plus className="size-3.5" />
-                                Registrar nuevo cliente
+                                {t('orders.customer.registerNew')}
                               </button>
                             </div>
                           </>
@@ -515,8 +517,8 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
           ) : null}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Nombre del comprador *</label>
-              <input className={inputCls} style={inputStyle} value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder="Ej: Comercio El Centro" />
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('orders.buyerName')}</label>
+              <input className={inputCls} style={inputStyle} value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder={t('orders.buyerNamePlaceholder')} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
@@ -526,22 +528,22 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-                {engine ? engine.buyerTaxIdLabel : 'ID fiscal'} <span className="font-normal opacity-60">(opcional)</span>
+                {engine ? engine.buyerTaxIdLabel : t('orders.taxId.fallbackLabel')} <span className="font-normal opacity-60">{t('orders.optional')}</span>
               </label>
-              <input className={inputCls} style={inputStyle} value={buyerTaxId} onChange={e => setBuyerTaxId(e.target.value)} placeholder={engine ? engine.buyerTaxIdPlaceholder : 'Documento fiscal del comprador'} />
+              <input className={inputCls} style={inputStyle} value={buyerTaxId} onChange={e => setBuyerTaxId(e.target.value)} placeholder={engine ? engine.buyerTaxIdPlaceholder : t('orders.taxId.fallbackPlaceholder')} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-                Email <span className="font-normal opacity-60">(opcional)</span>
+                Email <span className="font-normal opacity-60">{t('orders.optional')}</span>
               </label>
-              <input className={inputCls} style={inputStyle} value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)} placeholder="cliente@correo.com" />
+              <input className={inputCls} style={inputStyle} value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)} placeholder={t('orders.emailPlaceholder')} />
             </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-              Dirección <span className="font-normal opacity-60">(opcional)</span>
+              {t('orders.address.label')} <span className="font-normal opacity-60">{t('orders.optional')}</span>
             </label>
-            <input className={inputCls} style={inputStyle} value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} placeholder={`Av. Principal, ${meta.cityExample}`} />
+            <input className={inputCls} style={inputStyle} value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} placeholder={t('orders.addressPlaceholder', { city: meta.cityExample })} />
           </div>
 
           <label className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}>
@@ -552,17 +554,17 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
               className="size-4 accent-indigo-500"
             />
             {mode === 'saved' && selectedId
-              ? 'Actualizar los datos del cliente guardado con estos cambios'
-              : 'Guardar como cliente para próximas órdenes'}
+              ? t('orders.customer.updateSaved')
+              : t('orders.saveCustomer')}
           </label>
         </div>
 
         {/* Product picker */}
         <div>
-          <label className="mb-2 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Agregar productos del catálogo</label>
+          <label className="mb-2 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('orders.addProducts')}</label>
           <div className="space-y-1 max-h-48 overflow-y-auto rounded-xl" style={{ border: '1px solid var(--border)' }}>
             {store.products.length === 0 ? (
-              <p className="px-3 py-3 text-xs" style={{ color: 'var(--muted)' }}>Sin productos en catálogo. Agrégalos primero.</p>
+              <p className="px-3 py-3 text-xs" style={{ color: 'var(--muted)' }}>{t('orders.noCatalogProducts')}</p>
             ) : store.products.map(product => (
               <div key={product.id}>
                 {product.variants.length > 0 ? (
@@ -580,7 +582,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                         {inLocal(parseFloat(v.price ?? product.price)) && (
                           <span className="tabular-nums" style={{ color: 'var(--subtle)' }}>≈ {inLocal(parseFloat(v.price ?? product.price))}</span>
                         )}
-                        <span style={{ color: v.stock === 0 ? 'var(--danger)' : 'var(--success)' }}>({v.stock} disp.)</span>
+                        <span style={{ color: v.stock === 0 ? 'var(--danger)' : 'var(--success)' }}>{t('orders.stockAvailable', { stock: v.stock })}</span>
                         <Plus className="size-3.5" style={{ color: 'var(--accent)' }} />
                       </span>
                     </button>
@@ -599,7 +601,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                         {inLocal(parseFloat(product.price)) && (
                           <span className="tabular-nums" style={{ color: 'var(--subtle)' }}>≈ {inLocal(parseFloat(product.price))}</span>
                         )}
-                        <span style={{ color: product.stock === 0 ? 'var(--danger)' : 'var(--success)' }}>({product.stock} disp.)</span>
+                        <span style={{ color: product.stock === 0 ? 'var(--danger)' : 'var(--success)' }}>{t('orders.stockAvailable', { stock: product.stock })}</span>
                         <Plus className="size-3.5" style={{ color: 'var(--accent)' }} />
                       </span>
                   </button>
@@ -612,7 +614,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
         {/* Order lines */}
         {lines.length > 0 && (
           <div className="space-y-1.5">
-            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Líneas del pedido</label>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('orders.lines')}</label>
             {lines.map((line, idx) => (
               <div key={idx} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
                 <span className="flex-1 truncate text-xs font-medium" style={{ color: 'var(--ink)' }}>
@@ -638,9 +640,9 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
             {/* Totals */}
             <div className="rounded-xl px-3 py-3 space-y-1" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
               {[
-                { label: 'Subtotal', value: subtotal },
-                ...(hasFiscalEngine ? [{ label: 'IVA 16%', value: iva }] : []),
-                ...(hasFiscalEngine && store.config.applyIgtf ? [{ label: 'IGTF 3%', value: igtf }] : []),
+                { label: t('orders.subtotal'), value: subtotal },
+                ...(hasFiscalEngine ? [{ label: t('orders.taxes.iva'), value: iva }] : []),
+                ...(hasFiscalEngine && store.config.applyIgtf ? [{ label: t('orders.taxes.igtf'), value: igtf }] : []),
               ].map(row => (
                 <div key={row.label} className="flex justify-between text-xs" style={{ color: 'var(--muted)' }}>
                   <span>{row.label}</span>
@@ -649,17 +651,17 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
               ))}
               {!hasFiscalEngine && (
                 <p className="text-[11px]" style={{ color: 'var(--subtle)' }}>
-                  Sin impuestos automáticos — facturación aún no disponible para tu país.
+                  {t('orders.noAutoTaxes')}
                 </p>
               )}
               {inLocal(total) ? (
                 <>
                   <div className="flex justify-between border-t pt-1.5 text-sm font-bold" style={{ borderColor: 'var(--border)', color: 'var(--ink)' }}>
-                    <span>Total {localCurrency}</span>
+                    <span>{t('orders.totalLocal', { currency: localCurrency })}</span>
                     <span className="mono tabular-nums">{inLocal(total)}</span>
                   </div>
                   <div className="flex justify-between text-xs" style={{ color: 'var(--muted)' }}>
-                    <span>Se cobra en USDC</span>
+                    <span>{t('orders.chargedInUsdc')}</span>
                     <span className="flex items-center gap-1 mono tabular-nums">
                       <TokenUSDC variant="branded" size={14} />
                       ${total.toFixed(2)}
@@ -669,7 +671,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
               ) : (
                 <>
                   <div className="flex justify-between border-t pt-1.5 text-sm font-bold" style={{ borderColor: 'var(--border)', color: 'var(--ink)' }}>
-                    <span>Total USDC</span>
+                    <span>{t('orders.totalUsdc')}</span>
                     <span className="flex items-center gap-1 mono tabular-nums">
                       <TokenUSDC variant="branded" size={14} />
                       ${total.toFixed(2)}
@@ -677,7 +679,7 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
                   </div>
                   {localCurrency !== 'USD' && fxRate !== null && (
                     <div className="flex justify-between text-xs" style={{ color: 'var(--muted)' }}>
-                      <span>≈ Total en {localCurrency}</span>
+                      <span>{t('orders.approxTotalLocal', { currency: localCurrency })}</span>
                       <span className="mono tabular-nums">
                         {formatLocal(total * fxRate, localCurrency)}
                       </span>
@@ -691,8 +693,8 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
 
         {/* Notes */}
         <div>
-          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Notas</label>
-          <input className={inputCls} style={inputStyle} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Instrucciones especiales, plazo de entrega…" />
+          <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('orders.notes')}</label>
+          <input className={inputCls} style={inputStyle} value={notes} onChange={e => setNotes(e.target.value)} placeholder={t('orders.notesPlaceholder')} />
         </div>
 
         {error && (
@@ -702,9 +704,9 @@ function NewOrderForm({ store, tenantId, onCreated, onCancel }: NewOrderFormProp
         )}
 
         <div className="flex gap-2">
-          <button onClick={onCancel} className="flex-1 rounded-2xl py-3 text-sm font-semibold transition-all hover:opacity-80" style={{ background: 'var(--surface-muted)', color: 'var(--ink-2)', border: '1px solid var(--border)' }}>Cancelar</button>
+          <button onClick={onCancel} className="flex-1 rounded-2xl py-3 text-sm font-semibold transition-all hover:opacity-80" style={{ background: 'var(--surface-muted)', color: 'var(--ink-2)', border: '1px solid var(--border)' }}>{t('orders.cancel')}</button>
           <button onClick={() => { void handleCreate() }} disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: 'var(--accent)' }}>
-            <ShoppingCart className="size-4" /> {saving ? 'Guardando…' : 'Crear orden'}
+            <ShoppingCart className="size-4" /> {saving ? t('orders.saving') : t('orders.create')}
           </button>
         </div>
       </div>
@@ -738,13 +740,13 @@ function OrderCard({ order, store, tenantId }: { order: Order; store: DashboardS
   const handleGenerateLink = () => {
     setActionError('')
     void store.updateOrder(order.id, { status: 'pending_payment', paymentUrl: payUrl })
-      .catch((err: unknown) => setActionError(err instanceof Error ? err.message : 'No se pudo generar el link de pago.'))
+      .catch((err: unknown) => setActionError(storeErrorMessage(err)))
   }
 
   const handleCancel = () => {
     setActionError('')
     void store.updateOrder(order.id, { status: 'cancelled' })
-      .catch((err: unknown) => setActionError(err instanceof Error ? err.message : 'No se pudo cancelar la orden.'))
+      .catch((err: unknown) => setActionError(storeErrorMessage(err)))
   }
 
   const [markingPaid, setMarkingPaid] = useState(false)
@@ -752,12 +754,17 @@ function OrderCard({ order, store, tenantId }: { order: Order; store: DashboardS
     setActionError('')
     setMarkingPaid(true)
     void store.markChargePaid(order.id)
-      .catch((err: unknown) => setActionError(err instanceof Error ? err.message : 'No se pudo marcar como pagado.'))
+      .catch((err: unknown) => setActionError(storeErrorMessage(err)))
       .finally(() => setMarkingPaid(false))
   }
 
   const waText = encodeURIComponent(
-    `Hola ${order.buyerName}! Tu pedido ${order.orderNumber} por $${parseFloat(order.total).toFixed(2)} USDC está listo.\n\nLink de pago: ${payUrl}`
+    t('orders.whatsappMessage', {
+      buyerName: order.buyerName,
+      orderNumber: order.orderNumber,
+      amount: parseFloat(order.total).toFixed(2),
+      url: payUrl,
+    })
   )
 
   return (
@@ -794,7 +801,7 @@ function OrderCard({ order, store, tenantId }: { order: Order; store: DashboardS
           style={{ color: 'var(--muted)' }}
         >
           {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-          Detalle
+          {t('orders.detail')}
         </button>
 
         {order.status === 'draft' && (
@@ -803,7 +810,7 @@ function OrderCard({ order, store, tenantId }: { order: Order; store: DashboardS
             className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition-all hover:scale-[1.02]"
             style={{ background: 'var(--accent)' }}
           >
-            <ExternalLink className="size-3.5" /> Generar link de pago
+            <ExternalLink className="size-3.5" /> {t('orders.generatePaymentLink')}
           </button>
         )}
 
@@ -817,7 +824,7 @@ function OrderCard({ order, store, tenantId }: { order: Order; store: DashboardS
                 className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition-all hover:scale-[1.02]"
                 style={{ background: '#25D366' }}
               >
-                <MessageCircle className="size-3.5" /> Enviar WA
+                <MessageCircle className="size-3.5" /> {t('orders.sendWhatsapp')}
               </a>
             )}
           </>
@@ -830,7 +837,7 @@ function OrderCard({ order, store, tenantId }: { order: Order; store: DashboardS
             className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all hover:scale-[1.02] disabled:opacity-50"
             style={{ background: 'rgba(26,128,71,0.1)', color: 'var(--success)', border: '1px solid rgba(26,128,71,0.2)' }}
           >
-            <CheckCheck className="size-3.5" /> {markingPaid ? 'Marcando…' : 'Marcar como pagado'}
+            <CheckCheck className="size-3.5" /> {markingPaid ? t('orders.markingPaid') : t('orders.markPaid')}
           </button>
         )}
 
@@ -840,7 +847,7 @@ function OrderCard({ order, store, tenantId }: { order: Order; store: DashboardS
             className="ml-auto flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium"
             style={{ color: 'var(--danger)' }}
           >
-            <X className="size-3.5" /> Cancelar
+            <X className="size-3.5" /> {t('orders.cancel')}
           </button>
         )}
       </div>
@@ -917,8 +924,10 @@ export default function OrdersView({ store, tenantId }: { store: DashboardStore;
     try {
       await store.updateOrder(order.id, { status: 'pending_payment', paymentUrl: payUrl })
       setLinkError('')
-    } catch (err) {
-      setLinkError(`Orden ${order.orderNumber} creada, pero no se pudo generar el link de pago: ${err instanceof Error ? err.message : 'error desconocido'}`)
+    } catch {
+      setLinkError(t('orders.error.createdNoLink', {
+        number: order.orderNumber,
+      }))
     }
   }
 
@@ -942,14 +951,16 @@ export default function OrdersView({ store, tenantId }: { store: DashboardStore;
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs" style={{ color: 'var(--muted)' }}>
-          {store.orders.length} orden{store.orders.length !== 1 ? 'es' : ''}
+          {store.orders.length === 1
+            ? t('orders.countOne', { count: store.orders.length })
+            : t('orders.countMany', { count: store.orders.length })}
         </p>
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]"
           style={{ background: 'var(--accent)' }}
         >
-          <Plus className="size-4" /> Nueva orden
+          <Plus className="size-4" /> {t('orders.new')}
         </button>
       </div>
 
@@ -960,7 +971,7 @@ export default function OrdersView({ store, tenantId }: { store: DashboardStore;
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Buscar por N°, cliente, teléfono…"
+              placeholder={t('orders.searchPlaceholder')}
               className="w-full rounded-xl py-2.5 pl-9 pr-3 text-sm outline-none"
               style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--ink)' }}
             />
@@ -968,11 +979,11 @@ export default function OrdersView({ store, tenantId }: { store: DashboardStore;
           <div className="flex flex-wrap gap-1.5">
             {(
               [
-                { key: 'all', label: 'Todas' },
-                { key: 'pending_payment', label: 'Pendientes' },
-                { key: 'paid', label: 'Pagadas' },
-                { key: 'draft', label: 'Borradores' },
-                { key: 'cancelled', label: 'Canceladas' },
+                { key: 'all', label: t('orders.filter.all') },
+                { key: 'pending_payment', label: t('orders.filter.pending') },
+                { key: 'paid', label: t('orders.filter.paid') },
+                { key: 'draft', label: t('orders.filter.drafts') },
+                { key: 'cancelled', label: t('orders.filter.cancelled') },
               ] as const
             ).map(tab => (
               <button
@@ -1002,7 +1013,7 @@ export default function OrdersView({ store, tenantId }: { store: DashboardStore;
 
       {store.loading && store.orders.length === 0 && (
         <div className="flex items-center gap-2 px-1 py-6 text-xs" style={{ color: 'var(--muted)' }}>
-          <Loader2 className="size-3.5 animate-spin" /> Cargando órdenes…
+          <Loader2 className="size-3.5 animate-spin" /> {t('orders.loading')}
         </div>
       )}
 
@@ -1017,22 +1028,22 @@ export default function OrdersView({ store, tenantId }: { store: DashboardStore;
       {store.orders.length === 0 && !showForm && !store.loading && (
         <div className="flex flex-col items-center gap-3 rounded-3xl py-16 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <ShoppingCart className="size-10" style={{ color: 'var(--subtle)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--ink-2)' }}>Sin órdenes todavía</p>
-          <p className="text-xs" style={{ color: 'var(--muted)' }}>Crea una nueva orden para generar un link de pago.</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--ink-2)' }}>{t('orders.empty')}</p>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>{t('orders.emptyHint')}</p>
         </div>
       )}
 
       {store.orders.length > 0 && hasQuery && filtered.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-3xl py-16 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <Search className="size-10" style={{ color: 'var(--subtle)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--ink-2)' }}>Sin resultados</p>
-          <p className="text-xs" style={{ color: 'var(--muted)' }}>No hay órdenes que coincidan con tu búsqueda.</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--ink-2)' }}>{t('orders.noResults')}</p>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>{t('orders.emptyFiltered')}</p>
           <button
             onClick={() => { setQuery(''); setStatusFilter('all') }}
             className="rounded-full px-3 py-1 text-xs font-medium"
             style={{ background: 'var(--surface-muted)', color: 'var(--ink-2)', border: '1px solid var(--border)' }}
           >
-            Limpiar filtros
+            {t('orders.clearFilters')}
           </button>
         </div>
       )}
@@ -1040,13 +1051,13 @@ export default function OrdersView({ store, tenantId }: { store: DashboardStore;
       <AnimatePresence mode="popLayout">
         {pending.length > 0 && (
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)', letterSpacing: '0.08em' }}>Pendientes de pago</p>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)', letterSpacing: '0.08em' }}>{t('orders.pending')}</p>
             {pending.map(o => <OrderCard key={o.id} order={o} store={store} tenantId={tenantId} />)}
           </div>
         )}
         {rest.length > 0 && (
           <div className="space-y-3">
-            {pending.length > 0 && <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)', letterSpacing: '0.08em' }}>Historial</p>}
+            {pending.length > 0 && <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)', letterSpacing: '0.08em' }}>{t('orders.history')}</p>}
             {rest.map(o => <OrderCard key={o.id} order={o} store={store} tenantId={tenantId} />)}
           </div>
         )}

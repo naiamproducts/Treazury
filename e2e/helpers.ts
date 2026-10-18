@@ -8,22 +8,22 @@ export async function login(page: Page) {
   await page.goto('/')
   // Landing is English since import-export-pivot: enter the auth stage via
   // the header "Sign in" CTA (stable data-purpose locator), then drive the
-  // AuthPage — which keeps its Spanish copy until the Phase 7 sweep.
+  // AuthPage — English copy since the Phase 7a sweep (PR7a).
   // Forced click: the blurred header occasionally fails Playwright's
   // hit-target check and hangs until the test timeout. The handler is a
   // plain setStage('auth') so forcing the dispatch is safe.
   await page.locator('[data-purpose="header-signin-button"]').click({ force: true })
-  await page.getByPlaceholder('tu@empresa.com').waitFor({ timeout: 15_000 })
-  await page.getByPlaceholder('tu@empresa.com').fill(EMAIL)
+  await page.getByPlaceholder('you@company.com').waitFor({ timeout: 15_000 })
+  await page.getByPlaceholder('you@company.com').fill(EMAIL)
   await page.locator('input[type="password"]').fill(PASSWORD)
-  await page.getByRole('button', { name: /ingresar al panel/i }).click()
+  await page.getByRole('button', { name: /enter the dashboard/i }).click()
   // The sidebar renders the store's default tenant name ('Mi Negocio', see
   // src/store/index.ts) until the Supabase profile fetch lands — wait for the
   // real business name. Sandbox auth latency (and font-load layout shifts
   // around the submit button) can make the first submit miss or stall: retry
   // once if the auth stage is still up after the grace period.
   const dashboardReady = page.getByText('E2E Country Test')
-  const submit = page.getByRole('button', { name: /ingresar al panel/i })
+  const submit = page.getByRole('button', { name: /enter the dashboard/i })
   try {
     await dashboardReady.waitFor({ timeout: 30_000 })
   } catch (firstError) {

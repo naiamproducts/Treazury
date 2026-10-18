@@ -14,7 +14,7 @@ test.describe('Tramo A — Login + Dashboard', () => {
   test('dashboard default view is Órdenes', async ({ page }) => {
     await login(page)
     await expect(page.getByRole('heading', { name: 'Órdenes' })).toBeVisible()
-    await expect(page.getByText('Sin órdenes todavía')).toBeVisible()
+    await expect(page.getByText('No orders yet')).toBeVisible()
   })
 
   test('wallet address is visible in sidebar', async ({ page }) => {

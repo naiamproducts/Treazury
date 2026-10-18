@@ -1,5 +1,5 @@
 /**
- * CatalogView — gestión de productos con campos dinámicos, variantes y stock.
+ * CatalogView — product management with dynamic fields, variants and stock.
  */
 
 import React, { useState, useEffect } from 'react'
@@ -11,6 +11,14 @@ import {
 import type { DashboardStore, Product, ProductVariant, FieldDefinition } from '@/store'
 import { currencyForCountry, fetchUsdRate, formatLocal, readPricingPref, writePricingPref, resolveEntryCurrency } from '@/lib/currency'
 import type { PricingPref } from '@/lib/currency'
+import { t } from '@/i18n/t'
+import { asStoreError } from '@/store/errors'
+
+/** Localized English message for a thrown store mutation error — never blank. */
+export function storeErrorMessage(thrown: unknown): string {
+  return t(`errors.store.${asStoreError(thrown).code}`)
+}
+
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -22,7 +30,19 @@ function newFieldDef(): FieldDefinition {
   return { key: '', label: '', type: 'text' }
 }
 
-const UNITS = ['unidad', 'docena', 'caja', 'par', 'litro', 'kg', 'metro', 'rollo', 'juego']
+// Stored unit values are stable ids (data written by the merchant); labels
+// come from the catalog so the picker reads in English (PR7a).
+const UNITS = [
+  { value: 'unidad', labelKey: 'catalog.unitOption.unit' },
+  { value: 'docena', labelKey: 'catalog.unitOption.dozen' },
+  { value: 'caja', labelKey: 'catalog.unitOption.box' },
+  { value: 'par', labelKey: 'catalog.unitOption.pair' },
+  { value: 'litro', labelKey: 'catalog.unitOption.liter' },
+  { value: 'kg', labelKey: 'catalog.unitOption.kg' },
+  { value: 'metro', labelKey: 'catalog.unitOption.meter' },
+  { value: 'rollo', labelKey: 'catalog.unitOption.roll' },
+  { value: 'juego', labelKey: 'catalog.unitOption.set' },
+] as const
 
 // ── Stock badge ────────────────────────────────────────────────────────────
 
@@ -37,7 +57,7 @@ function StockBadge({ stock }: { stock: number }) {
       className="rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums"
       style={{ background: color.bg, color: color.fg }}
     >
-      {stock} {stock === 1 ? 'u.' : 'u.'}
+      {stock} {t('catalog.stockUnit')}
     </span>
   )
 }
@@ -80,9 +100,9 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
   const [error, setError] = useState('')
 
   const handleSave = () => {
-    if (!name.trim()) { setError('El nombre es requerido.'); return }
+    if (!name.trim()) { setError(t('catalog.error.validateName')); return }
     if (!price || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
-      setError('Ingresa un precio válido.'); return
+      setError(t('catalog.error.validatePrice')); return
     }
     // Convert local currency to USD for storage (prices are always stored in USD/USDC)
     let usdPrice = parseFloat(price)
@@ -136,28 +156,28 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
 
       <div className="p-5 space-y-4">
         <h3 className="display text-base font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.02em' }}>
-          {initial ? 'Editar producto' : 'Nuevo producto'}
+          {initial ? t('catalog.edit') : t('catalog.new')}
         </h3>
 
         {/* Basic fields */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Nombre *</label>
-            <input className={inputCls} style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="Nombre del producto" />
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('catalog.nameLabel')}</label>
+            <input className={inputCls} style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder={t('catalog.name')} />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>SKU (opcional)</label>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('catalog.sku')}</label>
             <input className={inputCls} style={inputStyle} value={sku} onChange={e => setSku(e.target.value)} placeholder="NEU-205-55R16" />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Unidad</label>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('catalog.unit')}</label>
             <select className={inputCls} style={inputStyle} value={unit} onChange={e => setUnit(e.target.value)}>
-              {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              {UNITS.map(u => <option key={u.value} value={u.value}>{t(u.labelKey)}</option>)}
             </select>
           </div>
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <label className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Precio base *</label>
+              <label className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('catalog.price')}</label>
               {localCurrency !== 'USD' && (
                 <div className="flex overflow-hidden rounded-lg text-[11px] font-semibold" style={{ border: '1px solid var(--border)' }}>
                   <button
@@ -174,7 +194,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
                     className="px-2 py-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ background: priceCurrency === 'local' ? 'var(--accent)' : 'var(--surface-muted)', color: priceCurrency === 'local' ? '#fff' : 'var(--muted)' }}
                   >{localCurrency}</button>
-                  {fxRate === null && <span className="px-2 py-0.5 text-[10px]" style={{ color: 'var(--subtle)' }}>cargando tasa…</span>}
+                  {fxRate === null && <span className="px-2 py-0.5 text-[10px]" style={{ color: 'var(--subtle)' }}>{t('catalog.rateLoading')}</span>}
                 </div>
               )}
             </div>
@@ -187,18 +207,18 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
               </p>
             )}
             {price && parseFloat(price) > 0 && localCurrency !== 'USD' && fxRate === null && (
-              <p className="mt-1 text-xs" style={{ color: 'var(--subtle)' }}>calculando equivalente…</p>
+              <p className="mt-1 text-xs" style={{ color: 'var(--subtle)' }}>{t('catalog.approxLoading')}</p>
             )}
           </div>
           {!showVariants && (
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Stock</label>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('catalog.stock')}</label>
               <input className={inputCls} style={inputStyle} inputMode="numeric" value={stock} onChange={e => setStock(e.target.value.replace(/\D/g, ''))} placeholder="0" />
             </div>
           )}
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>Descripción</label>
-            <input className={inputCls} style={inputStyle} value={description} onChange={e => setDescription(e.target.value)} placeholder="Descripción opcional" />
+            <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>{t('catalog.description')}</label>
+            <input className={inputCls} style={inputStyle} value={description} onChange={e => setDescription(e.target.value)} placeholder={t('catalog.descriptionPlaceholder')} />
           </div>
         </div>
 
@@ -209,7 +229,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
           className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all"
           style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}
         >
-          <span>Variantes (medidas, tallas, colores…)</span>
+          <span>{t('catalog.variants')}</span>
           {showVariants ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
         </button>
         <AnimatePresence>
@@ -229,7 +249,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
                       style={inputStyle}
                       value={v.label}
                       onChange={e => patchVariant(v.id, { label: e.target.value })}
-                      placeholder="Ej: Talle M"
+                      placeholder={t('catalog.variantLabelPlaceholder')}
                     />
                     <input
                       className="w-20 rounded-xl px-3 py-2 text-sm outline-none tabular-nums"
@@ -237,7 +257,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
                       inputMode="numeric"
                       value={String(v.stock)}
                       onChange={e => patchVariant(v.id, { stock: parseInt(e.target.value, 10) || 0 })}
-                      placeholder="Stock"
+                      placeholder={t('catalog.stock')}
                     />
                     <input
                       className="w-24 rounded-xl px-3 py-2 text-sm outline-none tabular-nums"
@@ -245,7 +265,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
                       inputMode="decimal"
                       value={v.price ?? ''}
                       onChange={e => patchVariant(v.id, { price: e.target.value || undefined })}
-                      placeholder="Precio"
+                      placeholder={t('catalog.variantPricePlaceholder')}
                     />
                     <button onClick={() => removeVariant(v.id)} className="rounded-xl p-2 transition-all hover:opacity-70" style={{ color: 'var(--danger)' }}>
                       <X className="size-4" />
@@ -257,7 +277,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
                   className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition-all hover:opacity-80"
                   style={{ background: 'var(--surface-muted)', border: '1px dashed var(--border)', color: 'var(--ink-2)' }}
                 >
-                  <Plus className="size-3.5" /> Agregar variante
+                  <Plus className="size-3.5" /> {t('catalog.addVariant')}
                 </button>
               </div>
             </motion.div>
@@ -271,7 +291,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
           className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all"
           style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}
         >
-          <span>Campos personalizados (marca, índice, etc.)</span>
+          <span>{t('catalog.customFields')}</span>
           {showCustomFields ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
         </button>
         <AnimatePresence>
@@ -291,7 +311,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
                       style={inputStyle}
                       value={fd.label}
                       onChange={e => patchFieldDef(idx, { label: e.target.value, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                      placeholder="Nombre del campo (ej: Marca)"
+                      placeholder={t('catalog.fieldNamePlaceholder')}
                     />
                     <select
                       className="rounded-xl px-3 py-2 text-sm outline-none"
@@ -299,16 +319,16 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
                       value={fd.type}
                       onChange={e => patchFieldDef(idx, { type: e.target.value as FieldDefinition['type'] })}
                     >
-                      <option value="text">Texto</option>
-                      <option value="number">Número</option>
-                      <option value="select">Opciones</option>
+                      <option value="text">{t('catalog.fieldType.text')}</option>
+                      <option value="number">{t('catalog.fieldType.number')}</option>
+                      <option value="select">{t('catalog.fieldType.select')}</option>
                     </select>
                     <input
                       className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
                       style={inputStyle}
                       value={String(customFields[fd.key] ?? '')}
                       onChange={e => setCustomFields(cf => ({ ...cf, [fd.key]: e.target.value }))}
-                      placeholder="Valor"
+                      placeholder={t('catalog.fieldValuePlaceholder')}
                     />
                     <button onClick={() => removeFieldDef(idx)} className="rounded-xl p-2 transition-all hover:opacity-70" style={{ color: 'var(--danger)' }}>
                       <X className="size-4" />
@@ -320,7 +340,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
                   className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition-all hover:opacity-80"
                   style={{ background: 'var(--surface-muted)', border: '1px dashed var(--border)', color: 'var(--ink-2)' }}
                 >
-                  <Plus className="size-3.5" /> Agregar campo
+                  <Plus className="size-3.5" /> {t('catalog.addField')}
                 </button>
               </div>
             </motion.div>
@@ -339,7 +359,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
             className="flex-1 rounded-2xl py-3 text-sm font-semibold transition-all hover:opacity-80"
             style={{ background: 'var(--surface-muted)', color: 'var(--ink-2)', border: '1px solid var(--border)' }}
           >
-            Cancelar
+            {t('catalog.cancel')}
           </button>
           <button
             onClick={handleSave}
@@ -347,7 +367,7 @@ function ProductForm({ initial, onSave, onCancel, localCurrency, fxRate, initial
             style={{ background: 'var(--accent)' }}
           >
             <Check className="size-4" />
-            {initial ? 'Guardar cambios' : 'Agregar producto'}
+            {initial ? t('catalog.saveChanges') : t('catalog.add')}
           </button>
         </div>
       </div>
@@ -412,7 +432,9 @@ const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(function 
             <StockBadge stock={product.stock} />
             {product.variants.length > 0 && (
               <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                {product.variants.length} variante{product.variants.length !== 1 ? 's' : ''}
+                {product.variants.length === 1
+                  ? t('catalog.variantCountOne', { count: product.variants.length })
+                  : t('catalog.variantCountMany', { count: product.variants.length })}
               </span>
             )}
             {Object.entries(product.customFields).slice(0, 2).map(([k, v]) => (
@@ -432,13 +454,13 @@ const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(function 
           style={{ color: 'var(--muted)' }}
         >
           {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-          Stock
+          {t('catalog.stock')}
         </button>
         <button onClick={onEdit} className="ml-auto flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all hover:opacity-80" style={{ color: 'var(--muted)' }}>
-          <Pencil className="size-3.5" /> Editar
+          <Pencil className="size-3.5" /> {t('catalog.edit')}
         </button>
         <button onClick={onDelete} className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all hover:opacity-80" style={{ color: 'var(--danger)' }}>
-          <Trash2 className="size-3.5" /> Eliminar
+          <Trash2 className="size-3.5" /> {t('catalog.delete')}
         </button>
       </div>
 
@@ -463,7 +485,7 @@ const ProductCard = React.forwardRef<HTMLDivElement, ProductCardProps>(function 
                 </div>
               )) : (
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium" style={{ color: 'var(--ink-2)' }}>Stock total</span>
+                  <span className="text-xs font-medium" style={{ color: 'var(--ink-2)' }}>{t('catalog.stockTotal')}</span>
                   <div className="flex items-center gap-2">
                     <button onClick={() => onStockAdjust(undefined, -1)} className="flex size-7 items-center justify-center rounded-lg text-base font-bold transition-all hover:opacity-70" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }}>−</button>
                     <span className="mono w-8 text-center text-sm tabular-nums" style={{ color: 'var(--ink)' }}>{product.stock}</span>
@@ -519,20 +541,20 @@ export default function CatalogView({ store, tenantId }: { store: DashboardStore
       setShowForm(false)
       setEditingId(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el producto.')
+      setError(storeErrorMessage(err))
     }
   }
 
   const handleDelete = (id: string) => {
     setError('')
     void store.deleteProduct(id)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo eliminar el producto.'))
+      .catch((err: unknown) => setError(storeErrorMessage(err)))
   }
 
   const handleStockAdjust = (productId: string, variantId: string | undefined, delta: number) => {
     setError('')
     void store.updateStock(productId, variantId, delta)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo actualizar el stock.'))
+      .catch((err: unknown) => setError(storeErrorMessage(err)))
   }
 
   const editingProduct = editingId ? store.products.find(p => p.id === editingId) : undefined
@@ -543,7 +565,9 @@ export default function CatalogView({ store, tenantId }: { store: DashboardStore
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs" style={{ color: 'var(--muted)' }}>
-            {store.products.length} producto{store.products.length !== 1 ? 's' : ''}
+            {store.products.length === 1
+              ? t('catalog.countOne', { count: store.products.length })
+              : t('catalog.countMany', { count: store.products.length })}
           </p>
         </div>
         <button
@@ -551,7 +575,7 @@ export default function CatalogView({ store, tenantId }: { store: DashboardStore
           className="flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02]"
           style={{ background: 'var(--accent)' }}
         >
-          <Plus className="size-4" /> Nuevo producto
+          <Plus className="size-4" /> {t('catalog.new')}
         </button>
       </div>
 
@@ -587,7 +611,7 @@ export default function CatalogView({ store, tenantId }: { store: DashboardStore
       )}
 
       {store.loading && store.products.length === 0 && (
-        <p className="px-1 py-6 text-xs" style={{ color: 'var(--muted)' }}>Cargando catálogo…</p>
+        <p className="px-1 py-6 text-xs" style={{ color: 'var(--muted)' }}>{t('catalog.loading')}</p>
       )}
 
       {/* Product list */}
@@ -601,8 +625,8 @@ export default function CatalogView({ store, tenantId }: { store: DashboardStore
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
           >
             <Package className="size-10" style={{ color: 'var(--subtle)' }} />
-            <p className="text-sm font-medium" style={{ color: 'var(--ink-2)' }}>Sin productos todavía</p>
-            <p className="text-xs" style={{ color: 'var(--muted)' }}>Agrega tu primer producto para empezar.</p>
+            <p className="text-sm font-medium" style={{ color: 'var(--ink-2)' }}>{t('catalog.empty')}</p>
+            <p className="text-xs" style={{ color: 'var(--muted)' }}>{t('catalog.emptyHint')}</p>
           </motion.div>
         ) : (
           store.products.map(product => (

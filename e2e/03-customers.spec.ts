@@ -36,18 +36,18 @@ test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdow
     await ordenesNav.click()
     await expect(page.getByRole('heading', { name: 'Órdenes' })).toBeVisible()
 
-    await page.getByRole('button', { name: /nueva orden/i }).click()
-    await expect(page.getByRole('heading', { name: 'Nueva orden' })).toBeVisible({ timeout: 10_000 })
+    await page.getByRole('button', { name: /new order/i }).click()
+    await expect(page.getByRole('heading', { name: 'New order' })).toBeVisible({ timeout: 10_000 })
 
     // Ahora que hay clientes guardados, el modo 'Guardado' está activo
-    // Si ya está seleccionado (por seed), hacemos clic en Cambiar para abrir el buscador
-    const cambiarBtn = page.getByRole('button', { name: 'Cambiar' })
+    // Si ya está seleccionado (por seed), hacemos clic en Change para abrir el buscador
+    const cambiarBtn = page.getByRole('button', { name: 'Change' })
     if (await cambiarBtn.isVisible().catch(() => false)) {
       await cambiarBtn.click()
     }
 
     // El input del buscador debe estar visible
-    const searchInput = page.getByPlaceholder(/Buscar por nombre, WhatsApp/i)
+    const searchInput = page.getByPlaceholder(/search by name, whatsapp/i)
     await expect(searchInput).toBeVisible({ timeout: 10_000 })
 
     // Hacer clic en el buscador para desplegar el dropdown
@@ -62,15 +62,15 @@ test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdow
 
     // Probar filtro sin coincidencias
     await searchInput.fill('Comercio Inexistente XYZ')
-    await expect(page.getByText(/Sin coincidencias para/i)).toBeVisible()
+    await expect(page.getByText(/no matches for/i)).toBeVisible()
 
     // Limpiar búsqueda y seleccionar cliente
     await searchInput.fill('')
     const customerOption = page.getByRole('button', { name: /Distribuidora Los Andes/i })
     await customerOption.click()
 
-    // El dropdown se cierra y muestra la tarjeta con Cambiar
-    await expect(page.getByRole('button', { name: 'Cambiar' })).toBeVisible()
+    // El dropdown se cierra y muestra la tarjeta con Change
+    await expect(page.getByRole('button', { name: 'Change' })).toBeVisible()
 
     // Los campos de comprador deben estar precompletados con los datos del cliente seleccionado
     const buyerNameInput = page.locator('input[value="Distribuidora Los Andes"]')
@@ -82,30 +82,30 @@ test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdow
     await login(page)
     await expect(page.getByRole('heading', { name: 'Órdenes' })).toBeVisible()
 
-    const searchOrders = page.getByPlaceholder(/Buscar por N°, cliente/i)
-    const pendingTab = page.getByRole('button', { name: 'Pendientes' })
+    const searchOrders = page.getByPlaceholder(/search by #/i)
+    const pendingTab = page.getByRole('button', { name: 'Pending' })
 
-    // Con la tienda vacía se ve el estado "Sin órdenes todavía" y NO el buscador
+    // Con la tienda vacía se ve el estado "No orders yet" y NO el buscador
     // (los filtros no aportan sin datos que filtrar). Se detecta por la ausencia
     // del buscador, sin depender del estado previo de la base de datos.
     if ((await searchOrders.count()) === 0) {
-      await expect(page.getByText(/Sin órdenes todavía/i)).toBeVisible()
+      await expect(page.getByText(/no orders yet/i)).toBeVisible()
     } else {
       // Si ya hay órdenes, el buscador y las pestañas deben estar visibles
       await expect(searchOrders).toBeVisible()
       await expect(pendingTab).toBeVisible()
 
-      // Buscar algo sin coincidencias muestra el estado "Sin resultados"
+      // Buscar algo sin coincidencias muestra el estado "No results"
       await searchOrders.fill('ORDEN-QUE-NO-EXISTE-999')
-      await expect(page.getByText(/Sin resultados/i)).toBeVisible({ timeout: 10_000 })
+      await expect(page.getByText(/no results/i)).toBeVisible({ timeout: 10_000 })
 
-      // "Limpiar filtros" restablece la búsqueda
-      await page.getByRole('button', { name: /limpiar filtros/i }).click()
+      // "Clear filters" restablece la búsqueda
+      await page.getByRole('button', { name: /clear filters/i }).click()
       await expect(searchOrders).toHaveValue('')
 
       // Filtrar por estado no rompe el layout
       await pendingTab.click()
-      const section = page.getByText(/Pendientes de pago|Sin resultados|Historial/i)
+      const section = page.getByText(/pending payment|no results|history/i)
       await expect(section.first()).toBeVisible({ timeout: 10_000 })
     }
   })

@@ -13,6 +13,7 @@
 import { useState } from 'react'
 import { MessageSquare, KeyRound, Building2, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
 import type { AuthActions } from '../hooks/useAuth'
+import { t } from '../i18n/t'
 
 interface AuthPageProps {
   onBack: () => void
@@ -22,19 +23,19 @@ interface AuthPageProps {
 const showRegister = import.meta.env.VITE_SHOW_REGISTER === 'true'
 
 /**
- * Supabase returns auth failures in English. Map the known ones to Spanish
- * for display only — unknown messages pass through untouched.
+ * Supabase returns auth failures in English. Map the known ones to friendly
+ * catalog messages for display only — unknown messages pass through untouched.
  */
 function friendlyAuthError(raw: string): string {
   const msg = raw.toLowerCase()
-  if (msg.includes('invalid login credentials')) return 'Credenciales inválidas. Revisá tu email y contraseña.'
-  if (msg.includes('email not confirmed')) return 'Todavía no confirmaste tu email. Revisá tu bandeja de entrada.'
-  if (msg.includes('user already registered')) return 'Ese email ya está registrado. Ingresá en su lugar.'
-  if (msg.includes('password should be at least')) return 'La contraseña debe tener al menos 6 caracteres.'
-  if (msg.includes('signup requires a valid password')) return 'Ingresá una contraseña válida.'
-  if (msg.includes('unable to validate email address')) return 'El formato del email no es válido.'
-  if (msg.includes('email rate limit exceeded')) return 'Demasiados intentos. Esperá unos minutos y probá de nuevo.'
-  if (msg.includes('for security purposes')) return 'Por seguridad, esperá unos segundos antes de reintentar.'
+  if (msg.includes('invalid login credentials')) return t('auth.error.credentials')
+  if (msg.includes('email not confirmed')) return t('auth.error.emailConfirm')
+  if (msg.includes('user already registered')) return t('auth.error.register')
+  if (msg.includes('password should be at least')) return t('auth.error.passwordLength')
+  if (msg.includes('signup requires a valid password')) return t('auth.error.passwordInvalid')
+  if (msg.includes('unable to validate email address')) return t('auth.error.validateEmail')
+  if (msg.includes('email rate limit exceeded')) return t('auth.error.rateLimit')
+  if (msg.includes('for security purposes')) return t('auth.error.securityWait')
   return raw
 }
 
@@ -72,7 +73,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
     if (err) {
       setError(friendlyAuthError(err))
     } else {
-      setSuccess('Cuenta creada. Revisa tu email para confirmar, luego ingresa.')
+      setSuccess(t('auth.register.success'))
       setTab('login')
     }
   }
@@ -94,7 +95,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
         <p className="font-serif text-4xl font-medium tracking-tight text-white">
           Treazury<span className="ml-1 inline-block size-1.5 rounded-full bg-icyCyan opacity-90 shadow-[0_0_8px_rgba(165,243,252,0.8)]"></span>
         </p>
-        <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.22em] text-slate-400">Cobros B2B por WhatsApp</p>
+        <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.22em] text-slate-400">{t('auth.tagline')}</p>
       </div>
 
       {/* Card */}
@@ -102,17 +103,17 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
         {/* Tabs — only show if register is enabled */}
         {showRegister && (
           <div className="mb-6 flex rounded-full border border-white/10 bg-black/40 p-1">
-            {(['login', 'register'] as const).map(t => (
+            {(['login', 'register'] as const).map(tabId => (
               <button
-                key={t}
-                onClick={() => { setTab(t); setError(null); setSuccess(null) }}
+                key={tabId}
+                onClick={() => { setTab(tabId); setError(null); setSuccess(null) }}
                 className={`flex-1 rounded-full py-2 font-mono text-xs tracking-wider transition-all ${
-                  tab === t
+                  tab === tabId
                     ? 'border border-white/10 bg-white/10 text-white shadow-[0_0_12px_rgba(255,255,255,0.05)]'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                {t === 'login' ? 'Ingresar' : 'Crear cuenta'}
+                {tabId === 'login' ? t('auth.login.tab') : t('auth.register.tab')}
               </button>
             ))}
           </div>
@@ -135,7 +136,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
           <form onSubmit={(e) => { void handleLogin(e) }} className="space-y-4">
             <div className="space-y-1.5">
               <label className={labelClass}>
-                Correo electrónico
+                {t('auth.email.label')}
               </label>
               <div className="relative">
                 <Mail
@@ -145,7 +146,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="tu@empresa.com"
+                  placeholder={t('auth.email.placeholder')}
                   required
                   className={inputClass}
                 />
@@ -154,7 +155,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
 
             <div className="space-y-1.5">
               <label className={labelClass}>
-                Contraseña
+                {t('auth.password.label')}
               </label>
               <div className="relative">
                 <Lock
@@ -177,8 +178,8 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
               className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 font-mono text-xs font-medium uppercase tracking-wider text-black transition-all hover:bg-slate-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 shadow-[0_0_30px_rgba(255,255,255,0.25)]"
             >
               {loading
-                ? <><Loader2 className="size-4 animate-spin" /> Ingresando...</>
-                : <><KeyRound className="size-4" /> Ingresar al panel</>
+                ? <><Loader2 className="size-4 animate-spin" /> {t('auth.entering')}</>
+                : <><KeyRound className="size-4" /> {t('auth.cta.login')}</>
               }
             </button>
           </form>
@@ -189,7 +190,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
           <form onSubmit={(e) => { void handleRegister(e) }} className="space-y-4">
             <div className="space-y-1.5">
               <label className={labelClass}>
-                Nombre del negocio
+                {t('auth.businessName.label')}
               </label>
               <div className="relative">
                 <Building2
@@ -199,7 +200,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
                   type="text"
                   value={businessName}
                   onChange={e => setBusinessName(e.target.value)}
-                  placeholder="Nombre de tu negocio"
+                  placeholder={t('auth.businessName.placeholder')}
                   required
                   className={inputClass}
                 />
@@ -208,7 +209,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
 
             <div className="space-y-1.5">
               <label className={labelClass}>
-                Correo electrónico
+                {t('auth.email.label')}
               </label>
               <div className="relative">
                 <Mail
@@ -218,7 +219,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="tu@empresa.com"
+                  placeholder={t('auth.email.placeholder')}
                   required
                   className={inputClass}
                 />
@@ -227,7 +228,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
 
             <div className="space-y-1.5">
               <label className={labelClass}>
-                Contraseña
+                {t('auth.password.label')}
               </label>
               <div className="relative">
                 <Lock
@@ -237,7 +238,7 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder={t('auth.password.placeholder')}
                   required
                   minLength={8}
                   className={inputClass}
@@ -251,8 +252,8 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
               className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 font-mono text-xs font-medium uppercase tracking-wider text-black transition-all hover:bg-slate-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 shadow-[0_0_30px_rgba(255,255,255,0.25)]"
             >
               {loading
-                ? <><Loader2 className="size-4 animate-spin" /> Creando cuenta...</>
-                : <><ArrowRight className="size-4" /> Crear cuenta</>
+                ? <><Loader2 className="size-4 animate-spin" /> {t('auth.creating')}</>
+                : <><ArrowRight className="size-4" /> {t('auth.cta.register')}</>
               }
             </button>
           </form>
@@ -263,14 +264,14 @@ export default function AuthPage({ onBack, authActions }: AuthPageProps) {
           onClick={onBack}
           className="mt-5 w-full text-center font-mono text-xs tracking-wider text-slate-400 transition-colors hover:text-white"
         >
-          Volver al inicio
+          {t('auth.backToLanding')}
         </button>
       </div>
 
       {/* Approval note */}
       {!showRegister && (
         <p className="relative z-10 mt-4 max-w-xs text-center text-xs text-slate-500">
-          El acceso a Treazury está disponible por invitación durante el Alpha.
+          {t('auth.approvalNote')}
         </p>
       )}
     </div>

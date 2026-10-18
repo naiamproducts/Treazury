@@ -87,8 +87,8 @@ Chain strategy: pending
 
 ## Phase 7: App-Shell EN Sweep (PR 7a → 7b; largest slice)
 
-- [ ] 7.1 (7a) RED: write `e2e/09-app-locale.spec.ts` — active locale `en` (I18N-R1S2), spot-check rendered views contain no Spanish (I18N-R1S1).
-- [ ] 7.2 (7a) GREEN: sweep heaviest files into `t()` — `OrdersView.tsx` (~27), `AuthPage.tsx` (~14), `AccessRequestForm.tsx` (~14), `CatalogView.tsx` (~14).
+- [x] 7.1 (7a) RED: write `e2e/09-app-locale.spec.ts` — active locale `en` (I18N-R1S2), spot-check rendered views contain no Spanish (I18N-R1S1).
+- [x] 7.2 (7a) GREEN: sweep heaviest files into `t()` — `OrdersView.tsx` (~27), `AuthPage.tsx` (~14), `AccessRequestForm.tsx` (~14), `CatalogView.tsx` (~14).
 - [ ] 7.3 (7b) GREEN: remaining dashboard views + `errors` namespace — invalid form shows English error (I18N-R4). **GUARDRAIL: `venezuela.ts` untouched — verify `git diff --stat -- src/modules/invoicing/` is empty.**
 - [ ] 7.4 Final verification: `bun run check`, `bunx playwright test e2e/`, `forge test` (must stay untouched/pass), grep spot-check for residual Spanish outside `venezuela.ts` + fiscal snapshots.
   SPLIT OPTION: 7a (~90 strings) and 7b (~60 strings + errors) ship as separate PRs if either >800 lines.

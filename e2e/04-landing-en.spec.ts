@@ -11,13 +11,12 @@
  *    (text AND attributes: aria-label, placeholder, title, alt, value).
  *  - I18N-R3: English <title> and OpenGraph meta.
  *
- * Known gap (documented deviation): AccessRequestForm renders inside the hero
- * card but its Spanish strings are scheduled for Phase 7 (tasks.md 7.2 —
- * "sweep heaviest files into t() ... AccessRequestForm.tsx (~14)"). The
- * no-Spanish scan therefore scopes to landing-owned copy and removes the
- * access-request subtree (asserting removal count > 0 AND form visibility, so
- * a skipped render can never masquerade as a clean scan); full-page L-R4 is
- * verified after 7.2.
+ * Design note: AccessRequestForm renders inside the hero card. Its copy was
+ * swept to t() in Phase 7 (tasks.md 7.2); this file still scopes its scan to
+ * landing-owned copy and removes the access-request subtree (asserting
+ * removal count > 0 AND form visibility, so a skipped render can never
+ * masquerade as a clean scan) — the form's own no-Spanish scan is owned by
+ * e2e/09-app-locale.spec.ts (task 7.1).
  *
  * Review follow-ups implemented here (tasks.md Phase 2.5, tasks 2.5.3–2.5.7):
  * open-ended catalog growth (no upper bound — Phase 7 adds keys/namespaces),
@@ -26,14 +25,23 @@
  * normalization (login/register stems, `<ns>.error.<verb>`), terms sentence
  * composed without the stopword `conjunction` key, and dead `landing.meta.*`
  * keys removed (index.html is the sole meta source).
+ *
+ * Task 7.1 refactor: the no-Spanish scan machinery (orthography regex,
+ * scanned attributes, scoped collectVisibleCopy) is shared with
+ * e2e/09-app-locale.spec.ts via e2e/i18n-utils.ts; behavior is unchanged.
  */
 
 import { test, expect } from '@playwright/test'
 import { t } from '../src/i18n/t'
 import type { MessageKey } from '../src/i18n/t'
 import { en } from '../src/i18n/en'
+import {
+  collectVisibleCopy,
+  copyHaystack,
+  expectNoSpanishCopy,
+} from './i18n-utils'
 
-/** Access-request form subtree (Spanish copy deferred to Phase 7, task 7.2). */
+/** Access-request form subtree (scanned by e2e/09; excluded here by design). */
 const DEFERRED_FORM_SELECTOR =
   '[data-purpose="access-request-form"], [data-purpose="access-request-success"]'
 
@@ -55,12 +63,6 @@ const OLD_LANDING_SPANISH = [
   'Entrar al panel',
   'Ingresar',
 ]
-
-/** Spanish orthography / punctuation that must not survive on the landing. */
-const SPANISH_ORTHOGRAPHY = /[áéíóúñü¿¡]/
-
-/** Visible-element attributes scanned for Spanish copy (L-R4 hardening). */
-const SCANNED_ATTRIBUTES = ['aria-label', 'placeholder', 'title', 'alt', 'value']
 
 /** Design namespaces that exist in en.ts today (Phase 7 may add more — never fail on extras). */
 const EXPECTED_NAMESPACES = [
@@ -203,52 +205,25 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
     await page.goto('/')
     // Active locale is `en`
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-    // The deferred form MUST have rendered before we remove it — otherwise a
-    // skipped render would make the no-Spanish scan vacuously green.
+    // The access form MUST have rendered before we remove it — otherwise a
+    // skipped render would make the no-Spanish scan vacuously green. The
+    // heading assertion is dual-language: it accepts the pre-7.2 Spanish
+    // heading and the swept English one, so this file stays green across the
+    // sweep (e2e/09 owns the form's own no-Spanish scan).
     const deferredForm = page.locator('[data-purpose="access-request-form"]')
     await expect(deferredForm).toBeVisible()
-    await expect(deferredForm.getByRole('heading', { name: /solicit. acceso/i })).toBeVisible()
-    // Remove the access-request subtree (Spanish copy deferred — Phase 7 /
-    // task 7.2) and scan landing-owned copy: innerText AND visible-element
-    // attributes (aria-label, placeholder, title, alt, value).
-    const scan = await page.evaluate(
-      ({ deferredSel, attrs }) => {
-        const deferred = Array.from(document.querySelectorAll(deferredSel))
-        const removedCount = deferred.length
-        deferred.forEach(el => el.remove())
-        const attrText: string[] = []
-        for (const el of Array.from(document.body.querySelectorAll('*'))) {
-          if (el.getClientRects().length === 0) continue // visible elements only
-          for (const name of attrs) {
-            const value = el.getAttribute(name)
-            if (value) attrText.push(value)
-          }
-          // Controlled inputs carry their current value as a property, not an
-          // attribute — scan both so empty-looking React inputs still count.
-          const candidate = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-          if (
-            (candidate instanceof HTMLInputElement ||
-              candidate instanceof HTMLTextAreaElement ||
-              candidate instanceof HTMLSelectElement) &&
-            candidate.value
-          ) {
-            attrText.push(candidate.value)
-          }
-        }
-        return { removedCount, text: document.body.innerText, attrText: attrText.join('\n') }
-      },
-      { deferredSel: DEFERRED_FORM_SELECTOR, attrs: SCANNED_ATTRIBUTES }
-    )
+    await expect(deferredForm.getByRole('heading', { name: /solicit. acceso|request access/i })).toBeVisible()
+    // Remove the access-request subtree (owned by e2e/09) and scan
+    // landing-owned copy: innerText AND visible-element attributes
+    // (aria-label, placeholder, title, alt, value).
+    const scan = await collectVisibleCopy(page, { exclude: [DEFERRED_FORM_SELECTOR] })
     // Deferred subtree really was removed (form was rendered, not skipped)
-    expect(scan.removedCount).toBeGreaterThan(0)
+    expect(scan.excludedCount).toBeGreaterThan(0)
     // Case-insensitive scan: normalize both sides before matching.
-    const haystack = `${scan.text}\n${scan.attrText}`.toLowerCase()
-    // No Spanish orthography anywhere in the rendered landing copy/attributes
-    expect(haystack).not.toMatch(SPANISH_ORTHOGRAPHY)
-    // None of the pre-pivot Spanish landing phrases survive (either casing)
-    for (const phrase of OLD_LANDING_SPANISH) {
-      expect(haystack).not.toContain(phrase.toLowerCase())
-    }
+    const haystack = copyHaystack(scan)
+    // No Spanish orthography in landing copy/attributes; none of the
+    // pre-pivot Spanish landing phrases survive (either casing).
+    expectNoSpanishCopy(haystack, OLD_LANDING_SPANISH)
     // English terms banner renders (landing-owned surface)
     await expect(page.getByRole('button', { name: 'Got it' })).toBeVisible()
     // Terms sentence is composed from the minimum key set (task 2.5.7):
