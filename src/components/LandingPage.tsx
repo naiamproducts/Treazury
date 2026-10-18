@@ -76,9 +76,10 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
           <button
             type="button"
             onClick={onEnterApp}
+            data-purpose="header-signin-button"
             className="hidden sm:inline-block text-xs font-mono uppercase tracking-wider text-slate-300 hover:text-white transition-colors cursor-pointer"
           >
-            {t('landing.header.signin')}
+            {t('landing.header.login')}
           </button>
           <button
             type="button"
@@ -86,7 +87,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             className="relative group px-5 py-2.5 rounded-full text-xs font-mono tracking-wider text-white transition-all duration-300 border border-white/20 hover:border-white/50 bg-white/[0.04] hover:bg-white/[0.08] shadow-[0_0_15px_rgba(255,255,255,0.04)] hover:shadow-[0_0_20px_rgba(255,255,255,0.12)] cursor-pointer"
           >
             <span className="relative z-10 flex items-center gap-2">
-              {t('landing.header.createAccount')} <span className="text-icyCyan transition-transform group-hover:translate-x-0.5">→</span>
+              {t('landing.header.register')} <span className="text-icyCyan transition-transform group-hover:translate-x-0.5">→</span>
             </span>
           </button>
         </div>
@@ -309,14 +310,12 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                 <a className="text-white underline decoration-white/40 hover:decoration-white font-medium" href="#terms">
                   {t('landing.terms.terms')}
                 </a>{' '}
-                {t('landing.terms.conjunction')}{' '}
                 <a
                   className="text-white underline decoration-white/40 hover:decoration-white font-medium"
                   href="#privacy"
                 >
                   {t('landing.terms.privacy')}
                 </a>
-                .
               </p>
             </div>
             <div className="flex items-center gap-3 shrink-0">

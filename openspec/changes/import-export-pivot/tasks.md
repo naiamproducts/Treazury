@@ -23,7 +23,7 @@ Chain strategy: pending
 | Unit | Goal | PR | Focused test command | Runtime harness | Rollback boundary |
 |------|------|----|----------------------|-----------------|-------------------|
 | 1 | Migration 006 + commercial-docs skeleton | PR1 | `bun run check` | N/A — SQL+types only, no UI surface | revert `006_commercial_docs.sql`, delete `src/modules/commercial-docs/` |
-| 2 | i18n layer + EN landing | PR2 | `bunx playwright test e2e/04-landing-en.spec.ts` | load landing, assert locale/copy | revert `src/i18n/`, `LandingPage.tsx`, `index.html`, `DESIGN.md` §0 |
+| 2 | i18n layer + EN landing | PR2 | `bunx playwright test e2e/04-landing-en.spec.ts` | load landing, assert locale/copy | revert `src/i18n/`, `LandingPage.tsx`, `index.html`, `DESIGN.md` §0, `e2e/04-landing-en.spec.ts`, `imgs/` |
 | 3a | Draft gen in store | PR3a | `bunx playwright test e2e/05-commercial-drafts.spec.ts` | order → pending_payment flow | revert store draft-gen hook |
 | 3b | Doc editor UI | PR3b | `bun run check && bunx playwright test e2e/05-commercial-drafts.spec.ts` | edit+save draft doc | revert `CommercialDocsView.tsx`, OrdersView hook |
 | 4 | Export PDF/CSV + released-only guard | PR4 | `bunx playwright test e2e/06-commercial-export.spec.ts` | export released vs draft doc | revert `renderers/`, `csv.ts`, export UI |
@@ -45,6 +45,18 @@ Chain strategy: pending
 - [x] 2.2 RED: write `e2e/04-landing-en.spec.ts` — English agency hero (L-R1), SWIFT-vs-USDC contrast on speed/cost/visibility (L-R2), payment→document-release statement (L-R3), no Spanish + locale `en` (L-R4 scoped, I18N-R1). **L-R4 SCOPE: scan covers landing-owned copy; `AccessRequestForm` Spanish remains deferred to 7.2 (deviation documented in the e2e header; full landing L-R4 acceptance at 7.4).**
 - [x] 2.3 GREEN: rewrite `src/components/LandingPage.tsx` EN agency copy (luxe-dark tokens), remove WhatsApp/Vendify; `index.html` `lang="en"` + EN title/OG (I18N-R3). **GUARDRAIL: `src/modules/invoicing/engines/venezuela.ts` Spanish fiscal HTML stays UNTOUCHED — guardrail outranks i18n.**
 - [x] 2.4 Update `DESIGN.md` §0 language rule Spanish→English. Verify: `bunx playwright test e2e/04-landing-en.spec.ts`.
+
+## Phase 2.5: Review follow-ups (PR 2.5 — tech debt from PR2 receipt)
+
+- [x] 2.5.1 Fix Phase-2 rollback boundary in the Work Units table: revert list must include `e2e/04-landing-en.spec.ts` and `imgs/` (suite would fail module-not-found otherwise). Accept: receipt follow-up R4-006.
+- [x] 2.5.2 Delete dead catalog keys `landing.meta.title`/`landing.meta.description` (`index.html` stays the sole meta source). Accept: R1-002, R2-003, R4-004.
+- [x] 2.5.3 Harden `t()`: type the key param as `keyof typeof en` (catalog via `satisfies`/const) and guard prototype-chain reads with `hasOwnProperty` so `t('toString')` falls back to the key string. Accept: R2-002, R4-011.
+- [x] 2.5.4 Harden `e2e/04-landing-en.spec.ts`: assert deferred-subtree removal count > 0 + form visibility; extend the no-Spanish scan to attributes (`aria-label`, `placeholder`, `title`, `alt`, `value`); case-insensitive `OLD_LANDING_SPANISH`; L-R3 locator via `[data-purpose="doc-release-statement"]`; catalog-shape test drops the 200-key ceiling (minimum + namespace subset only). Accept: R3-002, R2-008, R4-003, R4-005, R3-005.
+- [x] 2.5.5 Fix the `design.md #12` pointer in `src/i18n/en.ts`, `src/i18n/t.ts`, `e2e/04` comments → cite `openspec/changes/import-export-pivot/design.md` (Architecture Decisions #12). Accept: R2-007.
+- [x] 2.5.6 Normalize key vocabulary before the Phase-7 sweep: one stem per concept (`login`/`register`, matching `auth.*`) and one error-key convention (`<ns>.error.<verb>`), renaming unused keys and updating `LandingPage.tsx` call sites; grep consumers before every rename. Accept: R2-004, R2-005.
+- [x] 2.5.7 Consolidate the terms sentence (drop the stopword `conjunction` key; terminal punctuation inside the last key; single source for the sentence). Accept: R2-006.
+- [x] 2.5.8 Diagnose and fix `e2e/helpers.ts` `login()` so `e2e/01-login.spec.ts` passes against the EN landing + Spanish AuthPage (pre-existing 3/3 failure; selector `/iniciar sesión/i` never matches). Accept: pre-existing suite condition.
+- Verify: `bun run check` + `bunx playwright test e2e/04-landing-en.spec.ts e2e/01-login.spec.ts`.
 
 ## Phase 3: Draft Gen + Doc Editor (PR 3a → 3b; largest slice)
 

@@ -2,22 +2,35 @@
  * e2e/04-landing-en.spec.ts — English agency landing (import-export-pivot, slice 2).
  *
  * Covers:
- *  - Task 2.1 (i18n foundation): catalog shape (~150 keys, 11 namespaces) + pure t().
+ *  - Task 2.1 (i18n foundation): catalog shape (>=140 keys, design namespaces)
+ *    + pure t() (incl. prototype-chain guard from task 2.5.3).
  *  - L-R1: English hero addressed to import/export agencies.
  *  - L-R2: SWIFT vs USDC contrasted on speed, cost, visibility.
  *  - L-R3: USDC payment → commercial document release is stated.
- *  - L-R4 + I18N-R1: locale is `en`, no Spanish copy on landing-owned surfaces.
+ *  - L-R4 + I18N-R1: locale is `en`, no Spanish copy on landing-owned surfaces
+ *    (text AND attributes: aria-label, placeholder, title, alt, value).
  *  - I18N-R3: English <title> and OpenGraph meta.
  *
  * Known gap (documented deviation): AccessRequestForm renders inside the hero
  * card but its Spanish strings are scheduled for Phase 7 (tasks.md 7.2 —
  * "sweep heaviest files into t() ... AccessRequestForm.tsx (~14)"). The
  * no-Spanish scan therefore scopes to landing-owned copy and removes the
- * access-request subtree; full-page L-R4 is verified after 7.2.
+ * access-request subtree (asserting removal count > 0 AND form visibility, so
+ * a skipped render can never masquerade as a clean scan); full-page L-R4 is
+ * verified after 7.2.
+ *
+ * Review follow-ups implemented here (tasks.md Phase 2.5, tasks 2.5.3–2.5.7):
+ * open-ended catalog growth (no upper bound — Phase 7 adds keys/namespaces),
+ * attribute-level Spanish scan, case-insensitive OLD_LANDING_SPANISH matching,
+ * stable `[data-purpose="doc-release-statement"]` locator, vocabulary
+ * normalization (login/register stems, `<ns>.error.<verb>`), terms sentence
+ * composed without the stopword `conjunction` key, and dead `landing.meta.*`
+ * keys removed (index.html is the sole meta source).
  */
 
 import { test, expect } from '@playwright/test'
 import { t } from '../src/i18n/t'
+import type { MessageKey } from '../src/i18n/t'
 import { en } from '../src/i18n/en'
 
 /** Access-request form subtree (Spanish copy deferred to Phase 7, task 7.2). */
@@ -43,26 +56,74 @@ const OLD_LANDING_SPANISH = [
   'Ingresar',
 ]
 
+/** Spanish orthography / punctuation that must not survive on the landing. */
+const SPANISH_ORTHOGRAPHY = /[áéíóúñü¿¡]/
+
+/** Visible-element attributes scanned for Spanish copy (L-R4 hardening). */
+const SCANNED_ATTRIBUTES = ['aria-label', 'placeholder', 'title', 'alt', 'value']
+
+/** Design namespaces that exist in en.ts today (Phase 7 may add more — never fail on extras). */
+const EXPECTED_NAMESPACES = [
+  'auth',
+  'catalog',
+  'charges',
+  'customers',
+  'docs',
+  'errors',
+  'landing',
+  'orders',
+  'partners',
+  'settings',
+  'shell',
+]
+
 test.describe('i18n foundation (task 2.1) — catalog + t()', () => {
-  test('en catalog holds ~150 keys across the 11 design namespaces', () => {
+  test('en catalog holds at least 140 keys across the design namespaces', () => {
     const keys = Object.keys(en)
-    // design.md #12: flat dotted catalog, ~150 keys, 11 namespaces.
+    // openspec/changes/import-export-pivot/design.md (Architecture Decisions
+    // #12): flat dotted catalog, ~150 keys. Floor only — the catalog grows in
+    // Phase 7 (app-shell sweep), so there is deliberately no upper bound.
     expect(keys.length).toBeGreaterThanOrEqual(140)
-    expect(keys.length).toBeLessThanOrEqual(200)
-    const namespaces = [...new Set(keys.map(k => k.split('.')[0]))].sort()
-    expect(namespaces).toEqual([
-      'auth',
-      'catalog',
-      'charges',
-      'customers',
-      'docs',
-      'errors',
-      'landing',
-      'orders',
-      'partners',
-      'settings',
-      'shell',
-    ])
+    // Every namespace that exists today must exist; new namespaces never fail.
+    const namespaces = [...new Set(keys.map(k => k.split('.')[0]))]
+    expect(namespaces).toEqual(expect.arrayContaining(EXPECTED_NAMESPACES))
+  })
+
+  test('dead landing.meta.* keys are gone (index.html is the sole meta source)', () => {
+    // Task 2.5.2: meta copy lives in index.html only; catalog keys removed.
+    expect(Object.keys(en)).not.toContain('landing.meta.title')
+    expect(Object.keys(en)).not.toContain('landing.meta.description')
+  })
+
+  test('key vocabulary: login/register stems and <ns>.error.<verb> error keys', () => {
+    // Task 2.5.6: one stem per concept — login/register win over
+    // signin/createAccount (matches the auth.* namespace).
+    const keys = Object.keys(en)
+    expect(keys).toContain('landing.header.login')
+    expect(keys).not.toContain('landing.header.signin')
+    expect(keys).toContain('landing.header.register')
+    expect(keys).not.toContain('landing.header.createAccount')
+    // One error-key convention in auth/catalog: <ns>.error.<verb> — no
+    // legacy `<something>Error` suffix keys in those namespaces.
+    expect(keys.filter(k => /^(auth|catalog)\./.test(k) && /Error$/.test(k))).toEqual([])
+    expect(keys).not.toContain('auth.error.emailFormat')
+    expect(keys).not.toContain('auth.error.emailRegistered')
+    expect(keys).not.toContain('auth.error.tooManyAttempts')
+    expect(keys).not.toContain('catalog.priceError')
+    expect(keys).toContain('auth.error.validateEmail')
+    expect(keys).toContain('auth.error.register')
+    expect(keys).toContain('auth.error.rateLimit')
+    expect(keys).toContain('catalog.error.save')
+    expect(keys).toContain('catalog.error.delete')
+    expect(keys).toContain('catalog.error.validatePrice')
+  })
+
+  test('terms sentence has no stopword conjunction key', () => {
+    // Task 2.5.7: prefix + two links only; terminal conjunction and
+    // punctuation live in the last key (landing.terms.privacy) so the
+    // rendered sentence stays "… our Terms and Privacy."
+    expect(Object.keys(en)).not.toContain('landing.terms.conjunction')
+    expect(en['landing.terms.privacy']).toBe('and Privacy.')
   })
 
   test('t() resolves a catalog entry', () => {
@@ -74,7 +135,15 @@ test.describe('i18n foundation (task 2.1) — catalog + t()', () => {
   })
 
   test('t() falls back to the key for unknown messages', () => {
-    expect(t('nope.unknown.message')).toBe('nope.unknown.message')
+    expect(t('nope.unknown.message' as MessageKey)).toBe('nope.unknown.message')
+  })
+
+  test("t() returns the key for Object.prototype names (no prototype-chain reads)", () => {
+    // Task 2.5.3: en has no hasOwnProperty of its own; a naive en[key] read
+    // would surface Object.prototype members as truthy templates.
+    expect(t('toString' as MessageKey)).toBe('toString')
+    expect(t('constructor' as MessageKey)).toBe('constructor')
+    expect(t('hasOwnProperty' as MessageKey)).toBe('hasOwnProperty')
   })
 })
 
@@ -119,9 +188,9 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
   test('L-R3: USDC payment stated to release commercial documents', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByText('Payment releases the paperwork')).toBeVisible()
-    // The release statement paragraph (flow step 2 says "the order", not
-    // "an order", so this regex selects only the statement)
-    const statement = page.locator('p', { hasText: /settles an order in USDC/i })
+    // Stable locator: the flow statement element carries
+    // data-purpose="doc-release-statement" (LandingPage.tsx).
+    const statement = page.locator('[data-purpose="doc-release-statement"]')
     await expect(statement).toBeVisible()
     const statementText = await statement.innerText()
     expect(statementText).toMatch(/settles an order in USDC/i)
@@ -134,19 +203,59 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
     await page.goto('/')
     // Active locale is `en`
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-    // Scan landing-owned copy (access-request subtree excluded — Phase 7 / task 7.2)
-    const landingText = await page.evaluate(sel => {
-      document.querySelectorAll(sel).forEach(el => el.remove())
-      return document.body.innerText
-    }, DEFERRED_FORM_SELECTOR)
-    // No Spanish orthography anywhere in the rendered landing copy
-    expect(landingText).not.toMatch(/[áéíóúñü¿¡]/)
-    // None of the pre-pivot Spanish landing phrases survive
+    // The deferred form MUST have rendered before we remove it — otherwise a
+    // skipped render would make the no-Spanish scan vacuously green.
+    const deferredForm = page.locator('[data-purpose="access-request-form"]')
+    await expect(deferredForm).toBeVisible()
+    await expect(deferredForm.getByRole('heading', { name: /solicit. acceso/i })).toBeVisible()
+    // Remove the access-request subtree (Spanish copy deferred — Phase 7 /
+    // task 7.2) and scan landing-owned copy: innerText AND visible-element
+    // attributes (aria-label, placeholder, title, alt, value).
+    const scan = await page.evaluate(
+      ({ deferredSel, attrs }) => {
+        const deferred = Array.from(document.querySelectorAll(deferredSel))
+        const removedCount = deferred.length
+        deferred.forEach(el => el.remove())
+        const attrText: string[] = []
+        for (const el of Array.from(document.body.querySelectorAll('*'))) {
+          if (el.getClientRects().length === 0) continue // visible elements only
+          for (const name of attrs) {
+            const value = el.getAttribute(name)
+            if (value) attrText.push(value)
+          }
+          // Controlled inputs carry their current value as a property, not an
+          // attribute — scan both so empty-looking React inputs still count.
+          const candidate = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+          if (
+            (candidate instanceof HTMLInputElement ||
+              candidate instanceof HTMLTextAreaElement ||
+              candidate instanceof HTMLSelectElement) &&
+            candidate.value
+          ) {
+            attrText.push(candidate.value)
+          }
+        }
+        return { removedCount, text: document.body.innerText, attrText: attrText.join('\n') }
+      },
+      { deferredSel: DEFERRED_FORM_SELECTOR, attrs: SCANNED_ATTRIBUTES }
+    )
+    // Deferred subtree really was removed (form was rendered, not skipped)
+    expect(scan.removedCount).toBeGreaterThan(0)
+    // Case-insensitive scan: normalize both sides before matching.
+    const haystack = `${scan.text}\n${scan.attrText}`.toLowerCase()
+    // No Spanish orthography anywhere in the rendered landing copy/attributes
+    expect(haystack).not.toMatch(SPANISH_ORTHOGRAPHY)
+    // None of the pre-pivot Spanish landing phrases survive (either casing)
     for (const phrase of OLD_LANDING_SPANISH) {
-      expect(landingText).not.toContain(phrase)
+      expect(haystack).not.toContain(phrase.toLowerCase())
     }
     // English terms banner renders (landing-owned surface)
     await expect(page.getByRole('button', { name: 'Got it' })).toBeVisible()
+    // Terms sentence is composed from the minimum key set (task 2.5.7):
+    // prefix + Terms link + Privacy link, punctuation inside the last key.
+    await expect(page.locator('[data-purpose="terms-cookie-banner"] p')).toContainText(
+      /By using Treazury, you accept our Terms and Privacy\./
+    )
   })
 
   test('I18N-R3: English title and OpenGraph meta', async ({ page }) => {

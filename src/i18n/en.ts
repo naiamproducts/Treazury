@@ -1,17 +1,24 @@
 /**
- * en — single-locale English message catalog (import-export-pivot, design.md #12).
+ * en — single-locale English message catalog (import-export-pivot,
+ * openspec/changes/import-export-pivot/design.md, Architecture Decisions #12).
  *
  * Flat dotted keys, 11 namespaces: landing, auth, shell, orders, catalog,
  * customers, charges, settings, docs, partners, errors. Single locale `en`;
  * no provider/context machinery — consumers import `t()` from './t'.
  * The landing namespace is consumed by LandingPage (PR2); remaining
  * namespaces are the migration targets for the app-shell sweep (Phase 7).
+ *
+ * `satisfies` (not a `Record<string, string>` annotation) keeps the literal
+ * key union so `t()` can type its parameter as `keyof typeof en` without a
+ * circular import (en.ts never imports from t.ts). Conventions: one stem per
+ * concept (`login`/`register`, never `signin`/`createAccount`) and error keys
+ * as `<ns>.error.<verb>` (e.g. catalog.error.save).
  */
 
-export const en: Record<string, string> = {
+export const en = {
   // ── landing (PR2 — consumed by LandingPage.tsx) ──────────────────────────
-  'landing.header.signin': 'Sign in',
-  'landing.header.createAccount': 'Create account',
+  'landing.header.login': 'Sign in',
+  'landing.header.register': 'Create account',
   'landing.hero.badge': 'For import/export agencies',
   'landing.hero.title.line1': 'Settle cross-border trade',
   'landing.hero.title.line2': 'for your clients,',
@@ -56,13 +63,11 @@ export const en: Record<string, string> = {
   'landing.ticker.privy': 'Privy',
   'landing.terms.prefix': 'By using Treazury, you accept our',
   'landing.terms.terms': 'Terms',
-  'landing.terms.conjunction': 'and',
-  'landing.terms.privacy': 'Privacy',
+  // The terminal conjunction + punctuation live in the last sentence key (no
+  // stopword `conjunction` key — LandingPage composes prefix + Terms + this).
+  'landing.terms.privacy': 'and Privacy.',
   'landing.terms.dismiss': 'Got it',
   'landing.terms.dismissAria': 'Dismiss terms notice',
-  'landing.meta.title': 'Treazury — USDC settlement and commercial documents for import/export agencies',
-  'landing.meta.description':
-    'The crypto alternative to SWIFT: settle client trade in USDC in minutes, with commercial documents released on payment.',
 
   // ── auth ─────────────────────────────────────────────────────────────────
   'auth.tagline': 'B2B payment links in USDC',
@@ -75,9 +80,9 @@ export const en: Record<string, string> = {
   'auth.cta.register': 'Create account',
   'auth.creating': 'Creating account…',
   'auth.entering': 'Signing in…',
-  'auth.error.emailFormat': 'The email format is not valid.',
-  'auth.error.emailRegistered': "That email is already registered. Sign in instead.",
-  'auth.error.tooManyAttempts': 'Too many attempts. Wait a few minutes and try again.',
+  'auth.error.validateEmail': 'The email format is not valid.',
+  'auth.error.register': "That email is already registered. Sign in instead.",
+  'auth.error.rateLimit': 'Too many attempts. Wait a few minutes and try again.',
 
   // ── shell ────────────────────────────────────────────────────────────────
   'shell.nav.orders': 'Orders',
@@ -121,7 +126,7 @@ export const en: Record<string, string> = {
   'catalog.saveChanges': 'Save changes',
   'catalog.name': 'Product name',
   'catalog.price': 'Base price *',
-  'catalog.priceError': 'Enter a valid price.',
+  'catalog.error.validatePrice': 'Enter a valid price.',
   'catalog.description': 'Description',
   'catalog.sku': 'SKU (optional)',
   'catalog.stock': 'Stock',
@@ -130,8 +135,8 @@ export const en: Record<string, string> = {
   'catalog.variants': 'Variants (sizes, cuts, colors…)',
   'catalog.customFields': 'Custom fields (brand, index, etc.)',
   'catalog.empty': 'No products yet',
-  'catalog.saveError': 'The product could not be saved.',
-  'catalog.deleteError': 'The product could not be deleted.',
+  'catalog.error.save': 'The product could not be saved.',
+  'catalog.error.delete': 'The product could not be deleted.',
 
   // ── customers ────────────────────────────────────────────────────────────
   'customers.new': 'New customer',
@@ -214,4 +219,4 @@ export const en: Record<string, string> = {
   'errors.retry': 'Try again.',
   'errors.notFound': "We couldn't find {resource}.",
   'errors.rateLimited': 'Too many attempts. Wait a moment and try again.',
-}
+} satisfies Record<string, string>
