@@ -203,28 +203,22 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             <div className="relative w-full overflow-hidden rounded-xl bg-black/30 border border-white/5 py-3 px-2 [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)]">
               <div className="flex items-center justify-around gap-6 opacity-70 hover:opacity-100 transition-opacity">
                 <div className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
-                  <svg className="w-3.5 h-3.5 fill-current text-white" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" fill="none" r="10" stroke="currentColor" strokeWidth="2"></circle>
-                    <path d="M12 6v12M8 10h8" stroke="currentColor" strokeLinecap="round" strokeWidth="2"></path>
-                  </svg>
+                  <img
+                    src="/logos/circle-usdc.svg"
+                    alt={t('landing.ticker.circle')}
+                    className="h-3.5 w-auto"
+                  />
                   <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
                     {t('landing.ticker.circle')}
                   </span>
                 </div>
                 <span className="text-slate-600 text-xs select-none">•</span>
                 <div className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
-                  <svg
-                    className="w-3.5 h-3.5 text-slate-300"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                  </svg>
+                  <img
+                    src="/logos/privy.svg"
+                    alt={t('landing.ticker.privy')}
+                    className="h-3.5 w-auto"
+                  />
                   <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
                     {t('landing.ticker.privy')}
                   </span>
