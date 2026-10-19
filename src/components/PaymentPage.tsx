@@ -1,15 +1,15 @@
 /**
- * PaymentPage — pantalla del comprador al abrir el link de pago.
+ * PaymentPage — buyer screen when opening a payment link.
  *
  * URL params:
- *   ?vault=<0x…>    OrderVault address (CREATE2) — destination del transfer
- *   ?to=<0x…>       Fallback: merchant address directo (modo sin contrato)
- *   ?amount=<usdc>  Monto esperado (human-readable)
- *   ?memo=<text>    Descripción del pedido
- *   ?chargeId=<id>  ID del charge para correlación
- *   ?merchant=<0x…> Merchant address (solo cuando vault está presente, para mostrar)
- *   ?display=<ccy>  Moneda display del comprador (ARS, VES, …). Solo visual:
- *                   el cargo siempre se liquida en USDC.
+ *   ?vault=<0x…>    OrderVault address (CREATE2) — transfer destination
+ *   ?to=<0x…>       Fallback: direct merchant address (contractless mode)
+ *   ?amount=<usdc>  Expected amount (human-readable)
+ *   ?memo=<text>    Order description
+ *   ?chargeId=<id>  Charge ID for reconciliation
+ *   ?merchant=<0x…> Merchant address (only when a vault is present, for display)
+ *   ?display=<ccy>  Buyer display currency (ARS, VES, …). Display-only:
+ *                   the charge always settles in USDC.
  *
  * Styled in the Treazury luxe-dark theme (scoped to .luxe-landing).
  */
@@ -22,6 +22,7 @@ import { TokenUSDC } from '@web3icons/react'
 import { Landmark, Wallet, CreditCard, ChevronDown, Copy, Check, CheckCircle2, Clock, AlertCircle, ExternalLink } from 'lucide-react'
 import PayWithWallet from './PayWithWallet'
 import { supabase } from '../lib/supabase'
+import { t } from '../i18n/t'
 import { getUsdc } from '@/onchain-facts'
 import { Amount, usdcDecimalsFor } from '@/onchain-money'
 import { fetchUsdRate, formatLocal, CURRENCIES, accountLabelForCurrency } from '@/lib/currency'
@@ -40,9 +41,9 @@ type MethodId = 'transfer' | 'usdc' | 'card'
  * changes: the hero, verification and reconciliation stay untouched.
  */
 const PAYMENT_METHODS: { id: MethodId; label: string; Icon: typeof Landmark; status: 'active' | 'soon' }[] = [
-  { id: 'transfer', label: 'Transferencia bancaria', Icon: Landmark, status: 'active' },
-  { id: 'usdc',     label: 'Pagar con USDC',         Icon: Wallet,   status: 'active' },
-  { id: 'card',     label: 'Tarjeta de crédito / débito', Icon: CreditCard, status: 'soon' },
+  { id: 'transfer', label: t('pay.method.transfer'), Icon: Landmark, status: 'active' },
+  { id: 'usdc',     label: t('pay.method.usdc'),     Icon: Wallet,   status: 'active' },
+  { id: 'card',     label: t('pay.method.card'),     Icon: CreditCard, status: 'soon' },
 ]
 
 /** Label + value row with a copy button (alias, CBU, …). */
@@ -58,7 +59,7 @@ function CopyField({ label, value, mono }: { label: string; value: string; mono?
           onClick={() => { void navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }) }}
           className="shrink-0 rounded-md p-1 transition-colors hover:text-white"
           style={{ color: copied ? 'var(--luxe-cyan)' : undefined }}
-          aria-label={`Copiar ${label}`}
+          aria-label={t('pay.copyAria', { label })}
         >
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5 text-slate-500" />}
         </button>
@@ -226,9 +227,9 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
         </div>
         <div className="luxe-glass relative z-10 max-w-sm rounded-[2rem] p-8 text-center">
           <AlertCircle className="mx-auto mb-3 size-8 text-red-400" />
-          <p className="font-serif text-2xl font-medium text-white">Link de pago inválido</p>
+          <p className="font-serif text-2xl font-medium text-white">{t('pay.invalid.title')}</p>
           <p className="mt-2 text-sm text-slate-400">
-            Falta información requerida. Pídele al comerciante que comparta un link nuevo.
+            {t('pay.invalid.body')}
           </p>
         </div>
       </div>
@@ -248,23 +249,23 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
             <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/10">
               <CheckCircle2 className="size-8 text-emerald-300" />
             </div>
-            <p className="font-serif text-3xl font-medium text-white">Pago recibido</p>
+            <p className="font-serif text-3xl font-medium text-white">{t('pay.received.title')}</p>
             <p className="mt-2 text-sm text-slate-400">
               ${amount} USDC · {memo}
             </p>
             {verifyState === 'verified' && (
               <p className="mt-2 text-xs font-medium text-emerald-300">
-                Verificado onchain ✓
+                {t('pay.verified')}
               </p>
             )}
             {verifyState === 'checking' && (
               <p className="mt-2 text-xs text-slate-400">
-                Verificando pago onchain…
+                {t('pay.verifying')}
               </p>
             )}
             {verifyState === 'pending' && (
               <p className="mt-2 text-xs text-slate-400">
-                Pago enviado — la confirmación onchain sigue pendiente.
+                {t('pay.confirmPending')}
               </p>
             )}
             {paidTx && (
@@ -295,7 +296,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
   const bankAccount = searchParams.get('bacct') ?? ''
   const hasTransfer = bankAlias.trim() !== '' || bankAccount.trim() !== ''
   // Transfer row subtitle: local total + alias when known.
-  const transferSubtitle = [heroLocal, bankAlias.trim()].filter(Boolean).join(' · ') || 'Ver datos de transferencia'
+  const transferSubtitle = [heroLocal, bankAlias.trim()].filter(Boolean).join(' · ') || t('pay.viewTransferDetails')
 
   return (
     <div className="luxe-landing relative flex min-h-dvh flex-col items-center px-4 py-8 font-sans">
@@ -341,7 +342,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
               </div>
             )}
             {displayCurrency && displayRate === null && (
-              <p className="mt-2 text-center text-xs text-slate-500">Trayendo tasa…</p>
+              <p className="mt-2 text-center text-xs text-slate-500">{t('pay.rateLoading')}</p>
             )}
 
             {/* Vault state: partial payment banner */}
@@ -349,8 +350,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
               <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-200">
                 <Clock className="mt-0.5 size-3.5 shrink-0" />
                 <span>
-                  Pago parcial recibido: <strong>${vaultReceived}</strong> de <strong>${vaultExpected}</strong>.
-                  Transfiere el monto restante a la misma dirección del vault.
+                  {t('pay.partial.prefix')}<strong>${vaultReceived}</strong>{t('pay.partial.of')}<strong>${vaultExpected}</strong>{t('pay.partial.suffix')}
                 </span>
               </div>
             )}
@@ -358,7 +358,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
             {/* Vault loading indicator */}
             {hasVault && vaultLoading && !vaultState && (
               <p className="mt-2 text-center text-xs text-slate-500">
-                Verificando estado del vault…
+                {t('pay.vaultChecking')}
               </p>
             )}
           </div>
@@ -380,7 +380,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
                     {method.label}
                   </span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-                    Próximamente
+                    {t('pay.badge.soon')}
                   </span>
                 </div>
               )
@@ -412,7 +412,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
                     {method.id === 'transfer' ? (
                       <div className="space-y-2.5">
                         <div className="flex items-baseline justify-between">
-                          <span className="text-xs text-slate-400">A transferir</span>
+                          <span className="text-xs text-slate-400">{t('pay.transfer.amountLabel')}</span>
                           <span className="font-serif text-2xl font-medium tabular-nums text-white">
                             {heroLocal ?? `$${amountNum.toFixed(2)}`}
                           </span>
@@ -422,7 +422,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
                         )}
                         {bankName.trim() && (
                           <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-                            <span className="text-xs text-slate-400">Banco</span>
+                            <span className="text-xs text-slate-400">{t('settings.field.bank')}</span>
                             <span className="text-xs font-semibold text-white">{bankName.trim()}</span>
                           </div>
                         )}
@@ -430,7 +430,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
                           <CopyField label={accountLabelForCurrency(displayCurrency, bankAccount.trim())} value={bankAccount.trim()} mono />
                         )}
                         <p className="text-[11px] leading-relaxed text-slate-500">
-                          Transfiere el total exacto y avísale al comerciante — confirmará el pago manualmente.
+                          {t('pay.transfer.hint')}
                         </p>
                       </div>
                     ) : (
@@ -451,7 +451,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
         </div>
 
         <p className="text-center text-xs text-slate-500">
-          Pagos seguros con <span className="font-serif font-medium text-slate-300">Treazury</span>
+          {t('pay.secure')} <span className="font-serif font-medium text-slate-300">Treazury</span>
         </p>
       </div>
     </div>

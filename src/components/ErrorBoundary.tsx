@@ -7,6 +7,7 @@
 
 import { Component, type ReactNode } from 'react'
 import { TriangleAlert, RefreshCw } from 'lucide-react'
+import { t } from '../i18n/t'
 
 interface Props { children: ReactNode }
 interface State { error: Error | null }
@@ -49,15 +50,15 @@ export default class ErrorBoundary extends Component<Props, State> {
           </div>
 
           <h2 className="display text-xl font-bold" style={{ color: 'var(--ink)' }}>
-            Algo salió mal
+            {t('errors.crash.title')}
           </h2>
           <p className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>
-            Se produjo un error inesperado. Intenta recargar la página.
+            {t('errors.crash.body')}
           </p>
 
           <details className="mt-4 text-left">
             <summary className="cursor-pointer text-xs" style={{ color: 'var(--subtle)' }}>
-              Detalles técnicos
+              {t('errors.crash.details')}
             </summary>
             <pre
               className="mono mt-2 overflow-auto rounded-xl p-3 text-xs"
@@ -73,7 +74,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             style={{ background: 'var(--accent)' }}
           >
             <RefreshCw className="size-4" />
-            Recargar página
+            {t('errors.crash.reload')}
           </button>
         </div>
       </div>

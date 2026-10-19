@@ -2,8 +2,8 @@
  * PayStyle — AuthPage
  *
  * Login / Register screen. Uses Supabase Auth.
- * - Tab "Ingresar": email + password sign-in
- * - Tab "Crear cuenta": email + password + business name sign-up
+ * - Tab "Sign in": email + password sign-in
+ * - Tab "Create account": email + password + business name sign-up
  *   (only shown when VITE_SHOW_REGISTER=true)
  *
  * Styled in the Treazury luxe-dark theme (scoped to .luxe-landing),

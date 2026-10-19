@@ -27,14 +27,14 @@ export type StoreErrorCode =
   | 'unknown'
 
 const MESSAGES: Record<StoreErrorCode, string> = {
-  rls_denied: 'Permiso denegado: tu tenant todavía no está aprobado para escribir en esta tabla.',
-  not_found: 'El registro ya no existe.',
-  unique_violation: 'Ese valor ya está en uso.',
-  conflict: 'La base de datos rechazó el cambio.',
-  insufficient_stock: 'No hay stock suficiente.',
-  network: 'No se pudo contactar el servidor.',
-  unsupported: 'Operación no soportada todavía.',
-  unknown: 'Error inesperado.',
+  rls_denied: 'Permission denied: your tenant is not yet approved to write to this table.',
+  not_found: 'This record no longer exists.',
+  unique_violation: 'That value is already in use.',
+  conflict: 'The database rejected the change.',
+  insufficient_stock: 'Not enough stock.',
+  network: 'Could not reach the server.',
+  unsupported: 'Operation not supported yet.',
+  unknown: 'Unexpected error.',
 }
 
 export class StoreError extends Error {

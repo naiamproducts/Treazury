@@ -26,6 +26,7 @@ import ChargesView from './components/dashboard/ChargesView'
 import SettingsView from './components/dashboard/SettingsView'
 import { useDashboardStore } from './store'
 import { supabase } from './lib/supabase'
+import { t } from './i18n/t'
 import { toast } from 'sonner'
 
 type Stage = 'landing' | 'auth'
@@ -104,7 +105,7 @@ export default function App() {
       })
       .catch((err: unknown) => {
         persistedWalletRef.current = null
-        console.error('[PayStyle] no se pudo guardar la wallet de cobro en el tenant', err)
+        console.error('[PayStyle] could not persist the payout wallet on the tenant', err)
       })
   }, [auth, merchantWallet, storeUpdateConfig])
 
@@ -127,14 +128,14 @@ export default function App() {
       .then(({ error }) => {
         if (error) {
           console.warn('[PayStyle] payout alert registration failed; charges still work', error)
-          toast.warning('No se pudieron activar las alertas de pago. Los cobros siguen funcionando.')
+          toast.warning(t('charges.error.activateAlerts'))
           return
         }
         registeredPayoutRef.current = { tenantId, address }
       })
       .catch((invokeErr: unknown) => {
         console.warn('[PayStyle] payout alert registration failed; charges still work', invokeErr)
-        toast.warning('No se pudieron activar las alertas de pago. Los cobros siguen funcionando.')
+        toast.warning(t('charges.error.activateAlerts'))
       })
   }, [auth, merchantWallet])
 
@@ -235,7 +236,7 @@ onSignOut={() => { void auth.signOut() }}
                 color: '#fff',
               }}
             >
-              {merchantWallet.ensuring ? 'Reintentando…' : 'Reintentar'}
+              {merchantWallet.ensuring ? t('approval.retrying') : t('approval.retry')}
             </button>
           </div>
         </div>
@@ -248,7 +249,7 @@ onSignOut={() => { void auth.signOut() }}
       >
         <Loader2 className="size-6 animate-spin" style={{ color: 'var(--accent)' }} />
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          {waitingForWallet ? 'Creando tu wallet de cobros…' : 'Cargando panel…'}
+          {waitingForWallet ? t('shell.loading.payoutWallet') : t('shell.loading.dashboard')}
         </p>
       </div>
     )

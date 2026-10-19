@@ -1,6 +1,6 @@
 /**
- * CustomersView — gestión de clientes/compradores guardados.
- * Permite buscar, registrar, editar y vincular clientes para pedidos y cobros.
+ * CustomersView — management of saved customers/buyers.
+ * Search, register, edit and link customers to orders and charges.
  */
 
 import React, { useState, useMemo } from 'react'

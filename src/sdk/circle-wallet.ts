@@ -72,7 +72,7 @@ export async function resolveMerchantWallet(_config?: unknown): Promise<string |
  */
 export async function createMerchantWallet(_config?: unknown): Promise<string> {
   const address = await invokeCircleWallet('create')
-  if (!address) throw new Error('No se pudo crear la wallet (circle-wallet).')
+  if (!address) throw new Error('Could not create the wallet (circle-wallet).')
   return address
 }
 
@@ -84,6 +84,6 @@ export async function createMerchantWallet(_config?: unknown): Promise<string> {
  */
 export async function getOrCreateMerchantWallet(_config?: unknown): Promise<string> {
   const address = await invokeCircleWallet('get-or-create')
-  if (!address) throw new Error('No se pudo resolver la wallet (circle-wallet).')
+  if (!address) throw new Error('Could not resolve the wallet (circle-wallet).')
   return address
 }

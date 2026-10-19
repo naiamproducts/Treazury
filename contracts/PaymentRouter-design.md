@@ -424,7 +424,7 @@ Run: `forge test -vvv` and `forge test --gas-report`
 
 ## Common Patterns / Worked Examples
 
-### Example 1: Neumáticos Mayorista → Link de cobro → Pago completo
+### Example 1: Neumáticos Mayorista → Payment link → Full payment
 
 ```
 1. Backend: chargeId = "550e8400-e29b-41d4-a716-446655440000" (UUID)
@@ -443,14 +443,14 @@ Run: `forge test -vvv` and `forge test --gas-report`
 10. Backend: marks order PAID, decrements stock, generates invoice PDF
 ```
 
-### Example 2: Pago parcial + recordatorio
+### Example 2: Partial payment + reminder
 
 ```
 1. Vault created for chargeId, expectedAmount = 100 USDC
 2. Buyer sends 60 USDC → vault.received = 60e6 < 100e6
 3. Emits: PartialPaymentReceived(chargeId, buyer, 60e6, 60e6, 40e6)
-4. Dashboard shows: "Pago parcial recibido: $60.00 / $100.00 pendiente $40.00"
-5. Merchant clicks "Recordar pago" → WhatsApp: "Hola, falta $40 a la misma dirección 0xABC"
+4. Dashboard shows: "Partial payment received: $60.00 / $100.00 — $40.00 pending"
+5. Merchant clicks "Remind to pay" → WhatsApp: "Hi, $40 is still missing — send it to the same address 0xABC"
 6. Buyer sends 40 USDC → vault.received = 100e6 >= 100e6 → _sweep()
 7. PaymentReceived emitted with totalReceived = 100e6
 ```

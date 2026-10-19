@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { login, mockFx } from './helpers'
 
-test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdown', () => {
-  test('flujo completo: crear cliente desde Clientes y seleccionarlo con buscador + dropdown en Nueva orden', async ({ page }) => {
+test.describe('Track C — Customers in the sidebar and selector with search + dropdown', () => {
+  test('full flow: create a customer from Customers and select it with search + dropdown in New order', async ({ page }) => {
     await mockFx(page)
     await login(page)
 
@@ -36,7 +36,7 @@ test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdow
     // El cliente debe aparecer en la lista
     await expect(page.getByText('Distribuidora Los Andes')).toBeVisible({ timeout: 10_000 })
 
-    // 3. Ir a Órdenes y abrir modal de Nueva orden
+    // 3. Go to Orders and open the New order modal
     const ordenesNav = page.getByRole('button', { name: /órdenes|orders/i })
     await ordenesNav.click()
     await expect(page.getByRole('heading', { name: /órdenes|orders/i })).toBeVisible()
@@ -44,45 +44,45 @@ test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdow
     await page.getByRole('button', { name: /new order/i }).click()
     await expect(page.getByRole('heading', { name: 'New order' })).toBeVisible({ timeout: 10_000 })
 
-    // Ahora que hay clientes guardados, el modo 'Guardado' está activo
-    // Si ya está seleccionado (por seed), hacemos clic en Change para abrir el buscador
+    // With saved customers, the 'Saved' mode is active. If it is already
+    // selected (by seed), click Change to open the search
     const cambiarBtn = page.getByRole('button', { name: 'Change' })
     if (await cambiarBtn.isVisible().catch(() => false)) {
       await cambiarBtn.click()
     }
 
-    // El input del buscador debe estar visible
+    // The search input must be visible
     const searchInput = page.getByPlaceholder(/search by name, whatsapp/i)
     await expect(searchInput).toBeVisible({ timeout: 10_000 })
 
-    // Hacer clic en el buscador para desplegar el dropdown
+    // Click the search input to open the dropdown
     await searchInput.click()
 
-    // El dropdown desplegable debe mostrar al cliente
+    // The dropdown must show the customer
     await expect(page.getByRole('button', { name: /Distribuidora Los Andes/i })).toBeVisible({ timeout: 10_000 })
 
     // 4. Probar el filtro en tiempo real del buscador
     await searchInput.fill('Los Andes')
     await expect(page.getByRole('button', { name: /Distribuidora Los Andes/i })).toBeVisible()
 
-    // Probar filtro sin coincidencias
+    // Test the no-matches filter
     await searchInput.fill('Comercio Inexistente XYZ')
     await expect(page.getByText(/no matches for/i)).toBeVisible()
 
-    // Limpiar búsqueda y seleccionar cliente
+    // Clear the search and select the customer
     await searchInput.fill('')
     const customerOption = page.getByRole('button', { name: /Distribuidora Los Andes/i })
     await customerOption.click()
 
-    // El dropdown se cierra y muestra la tarjeta con Change
+    // The dropdown closes and the card with Change is shown
     await expect(page.getByRole('button', { name: 'Change' })).toBeVisible()
 
-    // Los campos de comprador deben estar precompletados con los datos del cliente seleccionado
+    // The buyer fields must be prefilled with the selected customer's data
     const buyerNameInput = page.locator('input[value="Distribuidora Los Andes"]')
     await expect(buyerNameInput).toBeVisible()
   })
 
-  test('Órdenes: estado vacío sin datos y buscador/filtros cuando hay órdenes', async ({ page }) => {
+  test('Orders: empty state with no data and search/filters when there are orders', async ({ page }) => {
     await mockFx(page)
     await login(page)
     await expect(page.getByRole('heading', { name: /órdenes|orders/i })).toBeVisible()
@@ -90,25 +90,25 @@ test.describe('Tramo C — Clientes en Sidebar y Selector con Buscador + Dropdow
     const searchOrders = page.getByPlaceholder(/search by #/i)
     const pendingTab = page.getByRole('button', { name: 'Pending' })
 
-    // Con la tienda vacía se ve el estado "No orders yet" y NO el buscador
-    // (los filtros no aportan sin datos que filtrar). Se detecta por la ausencia
-    // del buscador, sin depender del estado previo de la base de datos.
+    // With an empty store the "No orders yet" state shows and NOT the search
+    // (filters add nothing with no data to filter). Detected by the absence of
+    // the search input, independent of the previous database state.
     if ((await searchOrders.count()) === 0) {
       await expect(page.getByText(/no orders yet/i)).toBeVisible()
     } else {
-      // Si ya hay órdenes, el buscador y las pestañas deben estar visibles
+      // If there are already orders, the search and the tabs must be visible
       await expect(searchOrders).toBeVisible()
       await expect(pendingTab).toBeVisible()
 
-      // Buscar algo sin coincidencias muestra el estado "No results"
+      // Searching something with no matches shows the "No results" state
       await searchOrders.fill('ORDEN-QUE-NO-EXISTE-999')
       await expect(page.getByText(/no results/i)).toBeVisible({ timeout: 10_000 })
 
-      // "Clear filters" restablece la búsqueda
+      // "Clear filters" resets the search
       await page.getByRole('button', { name: /clear filters/i }).click()
       await expect(searchOrders).toHaveValue('')
 
-      // Filtrar por estado no rompe el layout
+      // Filtering by status does not break the layout
       await pendingTab.click()
       const section = page.getByText(/pending payment|no results|history/i)
       await expect(section.first()).toBeVisible({ timeout: 10_000 })

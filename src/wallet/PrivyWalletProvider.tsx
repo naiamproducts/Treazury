@@ -55,6 +55,7 @@ import {
 import { useCreateWallet as useCreateSolanaWallet } from '@privy-io/react-auth/solana'
 import type { LinkedAccountWithMetadata } from '@privy-io/react-auth'
 import { supabase } from '../lib/supabase'
+import { t } from '../i18n/t'
 import { PRIVY_APP_ID, isPrivyConfigured } from './config'
 import {
   DISABLED_MERCHANT_WALLET,
@@ -153,7 +154,7 @@ function PrivyJwtSync({ children, onAuthError }: { children: React.ReactNode; on
     try {
       await logout()
     } catch (err: unknown) {
-      console.warn('[PayStyle] no se pudo cerrar la sesión de Privy', err)
+      console.warn('[PayStyle] could not sign out of Privy', err)
     }
   }, [authenticated, logout])
 
@@ -184,8 +185,8 @@ function PrivyJwtSync({ children, onAuthError }: { children: React.ReactNode; on
 
   const handleAuthError = useCallback((error: Error) => {
     const detail = error.message.trim() ? `: ${error.message}` : ''
-    console.warn('[PayStyle] no se pudo autenticar la sesión de Privy', error)
-    onAuthError(`No se pudo autenticar la sesión de Privy${detail}.`)
+    console.warn('[PayStyle] could not authenticate the Privy session', error)
+    onAuthError(t('wallet.error.authSession', { detail }))
   }, [onAuthError])
 
   // Supported v3 path (config.customAuth is deprecated): Privy exchanges the
@@ -296,7 +297,7 @@ function useEnsureChainWallet(args: {
         },
         (err: unknown) => {
           if (creatingForUserId.current === userId) creatingForUserId.current = null
-          console.warn(`[PayStyle] no se pudo crear la wallet embebida ${chainLabel}`, err)
+          console.warn(`[PayStyle] could not create the embedded ${chainLabel} wallet`, err)
           if (cancelled) return
           const attemptsForUser = walletAttempts.current?.userId === userId
             ? walletAttempts.current.count
@@ -311,7 +312,7 @@ function useEnsureChainWallet(args: {
             return
           }
           const detail = err instanceof Error && err.message.trim() ? `: ${err.message}` : ''
-          setWalletError(`No se pudo crear la wallet de cobros${detail}. Recargá la página para reintentar.`)
+          setWalletError(t('wallet.error.createPayout', { detail }))
         },
       ).finally(() => {
         if (!cancelled) setEnsuring(false)

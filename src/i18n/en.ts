@@ -2,9 +2,9 @@
  * en — single-locale English message catalog (import-export-pivot,
  * openspec/changes/import-export-pivot/design.md, Architecture Decisions #12).
  *
- * Flat dotted keys, 15 namespaces: landing, auth, access, shell, orders,
- * catalog, customers, charges, settings, funds, country, approval, docs,
- * partners, errors. Single locale `en`; no provider/context machinery —
+ * Flat dotted keys, 17 namespaces: landing, auth, access, shell, orders,
+ * catalog, customers, charges, settings, funds, pay, wallet, country,
+ * approval, docs, partners, errors. Single locale `en`; no provider/context machinery —
  * consumers import `t()` from './t'. Consumed by PR2 (landing), PR7a
  * (auth, access, orders, catalog), PR7b (shell, customers, charges,
  * settings, funds, country, approval); docs/partners land with Phases 3–6.
@@ -151,6 +151,9 @@ export const en = {
   'shell.logout': 'Sign out',
   'shell.close': 'Close',
   'shell.sendWithdrawFunds': 'Send / withdraw funds',
+  // App-root loaders (App.tsx) shown while the dashboard store connects.
+  'shell.loading.payoutWallet': 'Creating your payout wallet…',
+  'shell.loading.dashboard': 'Loading dashboard…',
 
   // ── orders ───────────────────────────────────────────────────────────────
   'orders.new': 'New order',
@@ -343,6 +346,9 @@ export const en = {
   // linkError left in place (unused): store failures are shown through
   // storeErrorMessage → errors.store.* (task 7.3), not this stem.
   'charges.linkError': 'The payment link could not be generated.',
+  // Payout-alert registration (register-payout-address) is best-effort: the
+  // toast warns without blocking charges.
+  'charges.error.activateAlerts': 'Payment alerts could not be activated. Charges still work.',
   'charges.descriptionPlaceholder': 'Description (e.g. Order #123, Consultation)',
   'charges.walletTarget': 'Destination wallet',
   'charges.active': 'Active',
@@ -419,6 +425,64 @@ export const en = {
   'funds.error.validateAmount': 'Invalid amount (max 6 decimals).',
   'funds.error.insufficientBalance': 'Insufficient balance.',
 
+  // ── pay (buyer payment-link surface — PaymentPage + PayWithWallet) ──────
+  // Public, pre-auth surface: no dashboard context, plain `t()`.
+  'pay.method.transfer': 'Bank transfer',
+  'pay.method.usdc': 'Pay with USDC',
+  'pay.method.card': 'Credit / debit card',
+  'pay.badge.soon': 'Coming soon',
+  'pay.copyAria': 'Copy {label}',
+  'pay.invalid.title': 'Invalid payment link',
+  'pay.invalid.body': 'Required information is missing. Ask the merchant to share a new link.',
+  'pay.received.title': 'Payment received',
+  'pay.verified': 'Verified on-chain ✓',
+  'pay.verifying': 'Verifying payment on-chain…',
+  'pay.confirmPending': 'Payment sent — on-chain confirmation is still pending.',
+  'pay.rateLoading': 'Fetching rate…',
+  'pay.viewTransferDetails': 'View transfer details',
+  // Split around the <strong> amount spans in the partial-payment banner.
+  'pay.partial.prefix': 'Partial payment received: ',
+  'pay.partial.of': ' of ',
+  'pay.partial.suffix': '. Transfer the remaining amount to the same vault address.',
+  'pay.vaultChecking': 'Checking vault status…',
+  'pay.transfer.amountLabel': 'Amount to transfer',
+  'pay.transfer.hint':
+    'Transfer the exact total and let the merchant know — they will confirm the payment manually.',
+  'pay.secure': 'Secure payments with',
+  'pay.connect': 'Connect your wallet to pay with USDC',
+  'pay.wrongNetwork': 'Wrong network. Switch to Arc Testnet to continue.',
+  'pay.yourBalance': 'Your USDC balance',
+  'pay.insufficientFunds': 'Insufficient balance. You need {amount} USDC.',
+  'pay.reference': 'Reference',
+  'pay.vaultHint':
+    'Funds are deposited into a secure payment vault and the merchant receives them automatically once confirmed.',
+  'pay.switchToArc': 'Switch to Arc Testnet',
+  'pay.signingInWallet': 'Signing in your wallet…',
+  'pay.confirmInWallet': 'Confirm in your wallet…',
+  'pay.confirming': 'Confirming…',
+  'pay.payAmount': 'Pay ${amount} USDC',
+  'pay.fallbackHint':
+    'Your wallet does not sign typed data: approve + deposit will be used (two transactions).',
+  'pay.vaultFootnote': 'The payment is recorded on-chain in the order’s vault',
+  'pay.directFootnote': 'Funds go directly to the merchant’s wallet on Arc Testnet',
+  'pay.success.title': 'Payment confirmed',
+  'pay.success.vaultDeposited': 'deposited into the vault',
+  'pay.success.sentToMerchant': 'sent to the merchant',
+  'pay.success.order': 'Order: {id}',
+  'pay.viewOnExplorer': 'View on explorer',
+  'pay.error.rejected': 'Transaction cancelled.',
+  'pay.error.insufficientUsdc': 'Insufficient USDC balance.',
+  'pay.error.reverted': 'The transaction was reverted. Try again.',
+  'pay.error.generic': 'Something went wrong. Try again.',
+  'pay.error.invalidAmount': 'Invalid amount.',
+  // 'Firma cancelada' reuses funds.error.rejected ('Signature cancelled.'):
+  // same concept, one stem — do NOT add a pay.* twin.
+
+  // ── wallet (merchant embedded-wallet provisioning — PrivyWalletProvider) ─
+  'wallet.error.authSession': 'Could not authenticate the Privy session{detail}.',
+  'wallet.error.createPayout':
+    'Could not create the payout wallet{detail}. Reload the page to retry.',
+
   // ── country (PR7b — CountrySetupModal + PendingApproval step 1) ──────────
   'country.title': 'Where do you operate?',
   'country.subtitle': 'Choose your country to set the local currency and fiscal preferences.',
@@ -487,4 +551,9 @@ export const en = {
   'errors.store.network': 'Could not reach the server.',
   'errors.store.unsupported': 'Operation not supported yet.',
   'errors.store.unknown': 'Unexpected error.',
+  // Crash screen (ErrorBoundary) — a React render error, not a store error.
+  'errors.crash.title': 'Something went wrong',
+  'errors.crash.body': 'An unexpected error occurred. Try reloading the page.',
+  'errors.crash.details': 'Technical details',
+  'errors.crash.reload': 'Reload page',
 } satisfies Record<string, string>

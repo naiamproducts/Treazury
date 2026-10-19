@@ -1,13 +1,13 @@
 /**
- * SendFundsDialog — envío de USDC desde la wallet embebida del comercio.
+ * SendFundsDialog — USDC sends from the merchant's embedded wallet.
  *
- * Reemplaza el link muerto a app.arc.io: la wallet de cobros es una wallet
- * embebida de Privy custodiada por PayStyle, así que app.arc.io no puede
- * gestionarla. El envío se firma localmente con el provider EIP-1193 de la
- * wallet embebida y se envía onchain con viem sobre Arc Testnet.
+ * Replaces the dead link to app.arc.io: the payout wallet is a Privy
+ * embedded wallet owned by the merchant, so app.arc.io cannot manage it.
+ * The send is signed locally with the embedded wallet's EIP-1193 provider
+ * and broadcast onchain with viem over Arc Testnet.
  *
- * No custodiamos claves: Privy firma en el cliente y la app solo arma la
- * transacción ERC-20 transfer.
+ * We never custody keys: Privy signs on the client and the app only builds
+ * the ERC-20 transfer transaction.
  */
 
 import { useState } from 'react'

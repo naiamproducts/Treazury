@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { login, mockFx } from './helpers'
 
-test.describe('Tramo B — Moneda local visible', () => {
-  test('Cobros muestra equivalente ARS al escribir monto', async ({ page }) => {
+test.describe('Track B — Local currency visible', () => {
+  test('Charges show the ARS equivalent when typing an amount', async ({ page }) => {
     await mockFx(page)
     await login(page)
     // Nav + view copy: dual-language selectors across the Phase 7b sweep (task 7.3).
@@ -13,7 +13,7 @@ test.describe('Tramo B — Moneda local visible', () => {
     await expect(page.getByText(/≈/)).toBeVisible({ timeout: 10_000 })
   })
 
-  test('Catálogo muestra precio con equivalente ARS', async ({ page }) => {
+  test('Catalog shows the price with the ARS equivalent', async ({ page }) => {
     await mockFx(page)
     await login(page)
     await page.getByRole('button', { name: /catálogo|catalog/i }).click()
@@ -24,17 +24,17 @@ test.describe('Tramo B — Moneda local visible', () => {
     await expect(page.getByText(/≈/)).toBeVisible({ timeout: 10_000 })
   })
 
-  test('Órdenes abre el form de nueva orden', async ({ page }) => {
+  test('Orders opens the new-order form', async ({ page }) => {
     await mockFx(page)
     await login(page)
     await expect(page.getByRole('heading', { name: /órdenes|orders/i })).toBeVisible()
     await page.getByRole('button', { name: /new order/i }).click()
     // The form opens with customer selection fields
     await expect(page.getByText(/customer|buyer name/i).first()).toBeVisible({ timeout: 10_000 })
-    // The ≈ Equivalente logic is shared with Cobros/Catálogo (already tested above)
+    // The ≈ equivalent logic is shared with Charges/Catalog (already tested above)
   })
 
-  test('Nueva orden usa datos del país (AR), no de Venezuela', async ({ page }) => {
+  test('New order uses the country data (AR), not Venezuela', async ({ page }) => {
     await mockFx(page)
     await login(page)
     await expect(page.getByRole('heading', { name: /órdenes|orders/i })).toBeVisible()
@@ -49,7 +49,7 @@ test.describe('Tramo B — Moneda local visible', () => {
     await expect(page.getByPlaceholder(/\+58/)).toHaveCount(0)
   })
 
-  test('Preferencia de moneda: se elige una vez y queda en Cobros', async ({ page }) => {
+  test('Currency preference: chosen once and kept in Charges', async ({ page }) => {
     await mockFx(page)
     await login(page)
     await page.getByRole('button', { name: /configuración|settings/i }).click()
@@ -64,7 +64,7 @@ test.describe('Tramo B — Moneda local visible', () => {
     await expect(page.getByText('≈ $1.00 USDC')).toBeVisible({ timeout: 10_000 })
   })
 
-  test('Link estilo Linktree: alias, métodos y sin jerga cripto', async ({ page }) => {
+  test('Linktree-style link: alias, methods and no crypto jargon', async ({ page }) => {
     await mockFx(page)
     // Public payment link with merchant + bank data (no login needed)
     await page.goto('/?to=0x0000000000000000000000000000000000000000&amount=56&memo=ORD-0001&display=ARS&mname=Cornelius&bname=Banco%20Naci%C3%B3n&balias=CORNE.TEST.MP&bacct=0000003100000000000000')
@@ -72,19 +72,19 @@ test.describe('Tramo B — Moneda local visible', () => {
     await expect(page.getByText('Cornelius')).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText(/81\.200/).first()).toBeVisible()
     // Transfer method open by default with alias + copy
-    await expect(page.getByText('Transferencia bancaria')).toBeVisible()
+    await expect(page.getByText('Bank transfer')).toBeVisible()
     await expect(page.getByText('CORNE.TEST.MP').first()).toBeVisible()
     // USDC + coming-soon methods listed, no crypto jargon upfront
-    await expect(page.getByText('Pagar con USDC')).toBeVisible()
-    await expect(page.getByText('Próximamente')).toBeVisible()
+    await expect(page.getByText('Pay with USDC')).toBeVisible()
+    await expect(page.getByText('Coming soon')).toBeVisible()
     await expect(page.getByText('Arc Testnet')).toHaveCount(0)
     await expect(page.getByText(/onramp|beta privada/i)).toHaveCount(0)
     // Opening the USDC method shows the wallet flow with the USDC amount
-    await page.getByText('Pagar con USDC').click()
-    await expect(page.getByText(/Conecta tu wallet/i)).toBeVisible({ timeout: 10_000 })
+    await page.getByText('Pay with USDC').click()
+    await expect(page.getByText(/Connect your wallet/i)).toBeVisible({ timeout: 10_000 })
   })
 
-  test('Link de pago para México muestra CLABE y no CBU', async ({ page }) => {
+  test('Payment link for Mexico shows CLABE and not CBU', async ({ page }) => {
     await mockFx(page)
     await page.goto('/?to=0x0000000000000000000000000000000000000000&amount=50&memo=ORD-MX&display=MXN&mname=Taqueria&bname=BBVA%20M%C3%A9xico&bacct=012180000000000000')
     await expect(page.getByText('Taqueria')).toBeVisible({ timeout: 15_000 })

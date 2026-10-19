@@ -175,7 +175,7 @@ export interface DashboardStore {
   loading: boolean
 
   // Same window as `loading`, scoped to the customers read, so the order form
-  // can show the customer selector as "cargando" instead of "sin clientes".
+  // can show the customer selector as "loading" instead of "no customers".
   customersLoading: boolean
 
   // Last failed read/write, kept so the shell can surface it. Mutations also

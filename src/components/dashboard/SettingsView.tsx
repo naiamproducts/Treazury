@@ -1,7 +1,7 @@
 /**
- * SettingsView — configuración del negocio, datos fiscales según el país
- * fiscal elegido (RIF / CUIT / RFC según el motor registrado), wallet y
- * preferencias de facturación.
+ * SettingsView — business settings, fiscal data for the chosen fiscal
+ * country (RIF / CUIT / RFC per the registered engine), wallet and
+ * invoicing preferences.
  */
 
 import { useState } from 'react'

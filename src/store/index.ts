@@ -206,15 +206,15 @@ async function generateInvoiceForOrder(
   try {
     engine = invoiceFactory.get(tenantConfig.country)
   } catch {
-    throw new StoreError('unsupported', `No hay un motor de facturación registrado para el país "${tenantConfig.country}". Elige otro país fiscal en Configuración.`)
+    throw new StoreError('unsupported', `No billing engine is registered for country "${tenantConfig.country}". Pick another fiscal country in Settings.`)
   }
 
   const rif = tenantConfig.rif.trim()
   if (!rif) {
-    throw new StoreError('conflict', `Configura el ${engine.taxIdLabel} del negocio antes de generar la factura.`)
+    throw new StoreError('conflict', `Configure the business ${engine.taxIdLabel} before generating the invoice.`)
   }
   if (!engine.validateTaxId(rif)) {
-    throw new StoreError('conflict', `El ${engine.taxIdLabel} configurado (${tenantConfig.rif}) no tiene un formato válido. Ej: ${engine.taxIdExample}`)
+    throw new StoreError('conflict', `The configured ${engine.taxIdLabel} (${tenantConfig.rif}) does not have a valid format. E.g. ${engine.taxIdExample}`)
   }
 
   const { data: alreadyInvoiced, error: existingError } = await supabase
@@ -242,13 +242,13 @@ async function generateInvoiceForOrder(
   if (linesError) throw toStoreError(linesError, 'order_lines')
 
   if (lineRows.length === 0) {
-    throw new StoreError('conflict', 'La orden no tiene líneas para facturar.')
+    throw new StoreError('conflict', 'The order has no lines to invoice.')
   }
   const subtotal = lineRows
     .reduce((sum, row) => sum + Number(row.line_total), 0)
     .toFixed(2)
   if (!(Number(subtotal) > 0)) {
-    throw new StoreError('conflict', 'El total de la orden debe ser mayor que cero para facturar.')
+    throw new StoreError('conflict', 'The order total must be greater than zero to invoice it.')
   }
 
   const { data: invoiceNumber, error: rpcError } = await supabase.rpc('next_invoice_number')
@@ -324,7 +324,7 @@ async function generateInvoiceForOrder(
   // are not (see migration 002).
   const validation = invoiceFactory.validate(tenantConfig.country, invoiceDoc)
   if (!validation.valid) {
-    throw new StoreError('conflict', 'Factura inválida: ' + validation.errors.map(e => e.message).join('; '))
+    throw new StoreError('conflict', 'Invalid invoice: ' + validation.errors.map(e => e.message).join('; '))
   }
 
   const { error: invoiceError } = await supabase
@@ -380,7 +380,7 @@ async function adjustStockColumn(productId: string, delta: number): Promise<Prod
     // NULL is "no stock control", not zero. Writing a number here would switch
     // stock control on behind the merchant's back, so refuse instead.
     if (current.stock === null) {
-      throw new StoreError('unsupported', 'Este producto no tiene control de stock habilitado.')
+      throw new StoreError('unsupported', 'This product does not have stock control enabled.')
     }
 
     const next = current.stock + delta
@@ -399,7 +399,7 @@ async function adjustStockColumn(productId: string, delta: number): Promise<Prod
     const row = updated[0]
     if (row) return productRowToStore(row)
   }
-  throw new StoreError('insufficient_stock', `El stock cambió ${STOCK_CAS_ATTEMPTS} veces seguidas; reintenta.`)
+  throw new StoreError('insufficient_stock', `The stock changed ${STOCK_CAS_ATTEMPTS} times in a row; try again.`)
 }
 
 /**
@@ -419,7 +419,7 @@ async function adjustVariantStock(productId: string, variantId: string, delta: n
 
   const attributes = readAttributes(current.attributes)
   if (!attributes.variants.some(variant => variant.id === variantId)) {
-    throw new StoreError('not_found', 'La variante ya no existe en este producto.')
+    throw new StoreError('not_found', 'This variant no longer exists in this product.')
   }
   const variants = attributes.variants.map(variant =>
     variant.id === variantId ? { ...variant, stock: Math.max(0, variant.stock + delta) } : variant,
@@ -505,10 +505,10 @@ async function writeChargeForOrder(
   }
 
   if (patch.paymentUrl === undefined) {
-    throw new StoreError('not_found', 'No hay un cobro activo para esta orden y falta el link de pago para crearlo.')
+    throw new StoreError('not_found', 'There is no active charge for this order and the payment link is missing so one cannot be created.')
   }
   if (toQty(amount) <= 0) {
-    throw new StoreError('conflict', 'El total de la orden debe ser mayor que cero para generar un cobro.')
+    throw new StoreError('conflict', 'The order total must be greater than zero to generate a charge.')
   }
 
   const { data, error } = await supabase
@@ -690,7 +690,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
 
   const requireTenant = useCallback((): string => {
     if (!tenantId) {
-      throw new StoreError('unsupported', 'No hay sesión de tenant activa.')
+      throw new StoreError('unsupported', 'There is no active tenant session.')
     }
     return tenantId
   }, [tenantId])
@@ -735,11 +735,11 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     void load()
   }, [tenantId, load])
 
-  // Pago en vivo sin recarga manual: verify-payment marca charges como paid
-  // fuera de esta pestaña, así que ante cualquier cambio en charges u orders
-  // del tenant se recarga (la misma lectura inicial, sin patrones nuevos).
-  // Si Realtime no está habilitado para estas tablas, el comercio sigue
-  // viendo el pago con el botón de actualizar (store.refresh).
+  // Live payment updates without a manual reload: verify-payment marks charges
+  // as paid outside this tab, so any change in the tenant's charges or orders
+  // triggers a reload (the same initial read, no new patterns).
+  // If Realtime is not enabled for these tables, the merchant still sees the
+  // payment through the refresh button (store.refresh).
   useEffect(() => {
     if (!tenantId) return
     const channel = supabase
@@ -849,7 +849,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
       .eq('id', id)
       .select('id')
     if (error) throw toStoreError(error, 'products')
-    if (data.length === 0) throw new StoreError('not_found', 'El producto ya no existe.')
+    if (data.length === 0) throw new StoreError('not_found', 'This product no longer exists.')
 
     // Past order_lines keep their description snapshot: order_lines.product_id
     // is ON DELETE SET NULL, so deleting a product never rewrites history.
@@ -888,7 +888,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
   const updateCustomer = useCallback(async (id: string, patch: Partial<Customer>): Promise<Customer> => {
     const columns = customerToColumns(patch)
     if (columns.name !== undefined && !columns.name.trim()) {
-      throw new StoreError('conflict', 'El nombre del cliente es requerido.')
+      throw new StoreError('conflict', 'The customer name is required.')
     }
     const { data, error } = await supabase
       .from('contacts')
@@ -907,7 +907,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     const currentTenant = requireTenant()
     const name = input.name.trim()
     if (!name) {
-      throw new StoreError('conflict', 'El nombre del cliente es requerido.')
+      throw new StoreError('conflict', 'The customer name is required.')
     }
     // Last-line duplicate guard: an exact normalized match (name + phone /
     // tax ID / email) is updated with the new data instead of inserted twice.
@@ -959,7 +959,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
       .eq('id', id)
       .select('id')
     if (error) throw toStoreError(error, 'contacts')
-    if (!data || data.length === 0) throw new StoreError('not_found', 'El cliente ya no existe.')
+    if (!data || data.length === 0) throw new StoreError('not_found', 'This customer no longer exists.')
 
     setCustomers(prev => prev.filter(c => c.id !== id))
   }, [])
@@ -1023,7 +1023,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
       else throw toStoreError(error, 'orders')
     }
     if (inserted === null) {
-      throw new StoreError('unique_violation', `No se pudo asignar un número de orden único en ${ORDER_NUMBER_ATTEMPTS} intentos. ${lastConflict}`)
+      throw new StoreError('unique_violation', `Could not assign a unique order number in ${ORDER_NUMBER_ATTEMPTS} attempts. ${lastConflict}`)
     }
     const orderRow = inserted
 
@@ -1042,7 +1042,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
           .eq('id', orderRow.id)
         if (cleanupError) {
           throw new StoreError('unknown',
-            `Fallaron las líneas (${linesError.message}) y la orden ${orderRow.order_number} no se pudo eliminar (${cleanupError.message}). Elimínala a mano.`)
+            `The lines failed (${linesError.message}) and order ${orderRow.order_number} could not be deleted (${cleanupError.message}). Delete it manually.`)
         }
         throw toStoreError(linesError, 'order_lines')
       }
@@ -1063,7 +1063,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
     }
     if (failures.length > 0) {
       setError(new StoreError('conflict',
-        `La orden ${orderRow.order_number} se creó pero no se descontó el stock de: ${failures.join('; ')}`))
+        `Order ${orderRow.order_number} was created but stock was not decremented for: ${failures.join('; ')}`))
     }
 
     // Fiscal invoicing is NOT triggered here: NewOrderForm creates orders as
@@ -1091,7 +1091,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
       // Rewriting lines means delete-then-reinsert order_lines: a second
       // unguarded compensation step for a feature the UI does not have. Refuse
       // loudly rather than dropping part of the patch silently.
-      throw new StoreError('unsupported', 'Editar las líneas de una orden todavía no está soportado.')
+      throw new StoreError('unsupported', 'Editing the lines of an order is not supported yet.')
     }
 
     const columns = orderToColumns(patch, config.applyIgtf)
@@ -1152,7 +1152,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
         await generateInvoiceForOrder(currentTenant, id)
       } catch (thrown) {
         setError(new StoreError('conflict',
-          `La orden ${orderRow.order_number} se actualizó pero no se generó la factura: ${asStoreError(thrown).message}`))
+          `Order ${orderRow.order_number} was updated but the invoice could not be generated: ${asStoreError(thrown).message}`))
       }
     }
 
@@ -1177,7 +1177,7 @@ export function useDashboardStore(tenantId?: string): DashboardStore {
 
     const charge = pickChargeForOrder(charges)
     if (!charge) {
-      throw new StoreError('not_found', 'No hay un cobro activo para esta orden.')
+      throw new StoreError('not_found', 'There is no active charge for this order.')
     }
 
     // Update charge → paid
