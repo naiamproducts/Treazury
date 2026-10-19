@@ -87,11 +87,11 @@ const USDC_PERMIT_DOMAIN = {
 
 const PERMIT_DEADLINE_SECONDS = 600
 
-function parseOnchainError(error: Error | null): string {
+function parseOnchainError(error: Error | null, amount: string): string {
   if (!error) return ''
   const msg = error.message.toLowerCase()
   if (msg.includes('user rejected') || msg.includes('denied'))  return t('pay.error.rejected')
-  if (msg.includes('insufficient'))                             return t('pay.error.insufficientUsdc')
+  if (msg.includes('insufficient'))                             return t('pay.error.insufficientBalance', { amount })
   if (msg.includes('reverted'))                                 return t('pay.error.reverted')
   return t('pay.error.generic')
 }
@@ -297,6 +297,7 @@ export default function PayWithWallet({
     parseError ||
     (permitError || parseOnchainError(
       (permitTxError ?? approveError ?? transferError),
+      amount,
     ))
 
   const isReady =
@@ -363,7 +364,7 @@ export default function PayWithWallet({
           {insufficientBalance && (
             <div className="flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
               <AlertCircle className="size-4 shrink-0" />
-              {t('pay.insufficientFunds', { amount })}
+              {t('pay.error.insufficientBalance', { amount })}
             </div>
           )}
 

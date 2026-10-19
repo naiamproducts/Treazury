@@ -96,7 +96,7 @@ export default function SettingsView({ store, tenantId, onTenantUpdate }: Settin
         await onTenantUpdate?.()
       })
       .catch((err: unknown) => {
-        // StoreError.message is Spanish — map the code to errors.store.* (task 7.3).
+        // StoreError.message is a debug detail — map the code to errors.store.* for display.
         setError(storeErrorMessage(err))
       })
       .finally(() => setSaving(false))

@@ -297,9 +297,9 @@ export default function Shell({ store, children, onSignOut }: ShellProps) {
               style={{ background: 'rgba(186,43,76,0.08)', color: 'var(--danger)', border: '1px solid rgba(186,43,76,0.2)' }}
             >
               <AlertCircle className="mt-px size-3.5 shrink-0" />
-              {/* StoreError.message is Spanish (store/errors.ts MESSAGES) —
-                  map through the errors.store.* keys so this unawaited-failure
-                  banner stays English like every other swept surface. */}
+              {/* StoreError.message is a debug detail (code text + detail) —
+                  map the code through the errors.store.* keys so this
+                  unawaited-failure banner shows the mapped copy. */}
               <span className="flex-1">{storeErrorMessage(store.error)}</span>
               <button onClick={store.dismissError} aria-label={t('shell.close')}>
                 <X className="size-3.5" />

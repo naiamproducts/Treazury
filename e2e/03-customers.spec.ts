@@ -6,7 +6,7 @@ test.describe('Track C — Customers in the sidebar and selector with search + d
     await mockFx(page)
     await login(page)
 
-    // 1. Sidebar incluye "Clientes"/"Customers" y navega a la vista
+    // 1. Sidebar shows "Clientes"/"Customers" and navigates to the view
     // (dual-language selectors across the Phase 7b sweep, task 7.3)
     const clientesNav = page.getByRole('button', { name: /clientes|customers/i })
     await expect(clientesNav).toBeVisible()
@@ -18,7 +18,7 @@ test.describe('Track C — Customers in the sidebar and selector with search + d
       .first()
     await expect(nuevoClienteBtn).toBeVisible()
 
-    // 2. Crear un nuevo cliente para que la tienda tenga al menos un contacto
+    // 2. Create a new customer so the store has at least one contact
     await nuevoClienteBtn.click()
     // Name placeholder: dual-language across the 7b sweep (pre: "Ej:
     // Distribuidora Central C.A.", post: "e.g. Central Trading Co").
@@ -33,7 +33,7 @@ test.describe('Track C — Customers in the sidebar and selector with search + d
 
     await page.getByRole('button', { name: /agregar cliente|guardar cambios|add customer|save changes/i }).click()
 
-    // El cliente debe aparecer en la lista
+    // The customer must appear in the list
     await expect(page.getByText('Distribuidora Los Andes')).toBeVisible({ timeout: 10_000 })
 
     // 3. Go to Orders and open the New order modal
@@ -61,7 +61,7 @@ test.describe('Track C — Customers in the sidebar and selector with search + d
     // The dropdown must show the customer
     await expect(page.getByRole('button', { name: /Distribuidora Los Andes/i })).toBeVisible({ timeout: 10_000 })
 
-    // 4. Probar el filtro en tiempo real del buscador
+    // 4. Test the search's real-time filter
     await searchInput.fill('Los Andes')
     await expect(page.getByRole('button', { name: /Distribuidora Los Andes/i })).toBeVisible()
 

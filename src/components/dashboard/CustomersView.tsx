@@ -86,7 +86,7 @@ function CustomerForm({ initial, country, onSave, onCancel }: CustomerFormProps)
       address: address.trim() || undefined,
       notes: notes.trim() || undefined,
     }).catch(err => {
-      // StoreError.message is Spanish — map the code to errors.store.* (task 7.3).
+      // StoreError.message is a debug detail — map the code to errors.store.* for display.
       setError(storeErrorMessage(err))
     }).finally(() => {
       setSaving(false)
@@ -423,7 +423,7 @@ export default function CustomersView({ store, onNavigateToOrders }: CustomersVi
       setShowForm(false)
       setEditingId(null)
     } catch (err) {
-      // StoreError.message is Spanish — map the code to errors.store.* (task 7.3).
+      // StoreError.message is a debug detail — map the code to errors.store.* for display.
       setError(storeErrorMessage(err))
       throw err
     }

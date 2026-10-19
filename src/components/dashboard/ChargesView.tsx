@@ -102,7 +102,7 @@ export default function ChargesView({ store, tenantId }: { store: DashboardStore
       setAmount('')
       setMemo('')
     }).catch((err: unknown) => {
-      // StoreError.message is Spanish — map the code to errors.store.* (task 7.3).
+      // StoreError.message is a debug detail — map the code to errors.store.* for display.
       setGenError(storeErrorMessage(err))
     }).finally(() => {
       setGenerating(false)

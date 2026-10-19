@@ -452,26 +452,28 @@ export const en = {
   'pay.connect': 'Connect your wallet to pay with USDC',
   'pay.wrongNetwork': 'Wrong network. Switch to Arc Testnet to continue.',
   'pay.yourBalance': 'Your USDC balance',
-  'pay.insufficientFunds': 'Insufficient balance. You need {amount} USDC.',
   'pay.reference': 'Reference',
   'pay.vaultHint':
     'Funds are deposited into a secure payment vault and the merchant receives them automatically once confirmed.',
   'pay.switchToArc': 'Switch to Arc Testnet',
-  'pay.signingInWallet': 'Signing in your wallet…',
+  'pay.signingInWallet': 'Check your wallet to sign…',
   'pay.confirmInWallet': 'Confirm in your wallet…',
   'pay.confirming': 'Confirming…',
   'pay.payAmount': 'Pay ${amount} USDC',
   'pay.fallbackHint':
     'Your wallet does not sign typed data: approve + deposit will be used (two transactions).',
-  'pay.vaultFootnote': 'The payment is recorded on-chain in the order’s vault',
-  'pay.directFootnote': 'Funds go directly to the merchant’s wallet on Arc Testnet',
+  'pay.vaultFootnote': "The payment is recorded on-chain in the order's vault",
+  'pay.directFootnote': "Funds go directly to the merchant's wallet on Arc Testnet",
   'pay.success.title': 'Payment confirmed',
   'pay.success.vaultDeposited': 'deposited into the vault',
   'pay.success.sentToMerchant': 'sent to the merchant',
   'pay.success.order': 'Order: {id}',
   'pay.viewOnExplorer': 'View on explorer',
   'pay.error.rejected': 'Transaction cancelled.',
-  'pay.error.insufficientUsdc': 'Insufficient USDC balance.',
+  // Pre-flight balance banner + on-chain 'insufficient' error share this ONE
+  // key (same concept, one stem); funds.error.insufficientBalance is the
+  // bare-form sibling for surfaces with no amount in scope.
+  'pay.error.insufficientBalance': 'Insufficient balance. You need ${amount} USDC.',
   'pay.error.reverted': 'The transaction was reverted. Try again.',
   'pay.error.generic': 'Something went wrong. Try again.',
   'pay.error.invalidAmount': 'Invalid amount.',
