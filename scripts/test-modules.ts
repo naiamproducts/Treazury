@@ -126,7 +126,10 @@ test('USDCArcProvider creates a valid charge', async () => {
   assertEqual(charge.amount, '304.00', 'amount')
   assertEqual(charge.currency, 'USDC', 'currency')
   assertEqual(charge.status, 'pending', 'status should be pending')
-  assert(charge.paymentUrl.includes('to='), 'paymentUrl should contain ?to=')
+  // Predict path (no owner key): the charge must resolve to the OrderVault.
+  // A ?to= fallback means vault prediction failed (e.g. Arc RPC degraded) —
+  // that is a real failure, not a pass.
+  assert(charge.paymentUrl.includes('vault='), 'paymentUrl should contain vault=')
   assert(charge.paymentUrl.includes('amount=304.00'), 'paymentUrl should contain amount')
   assert(charge.paymentUrl.includes('chargeId='), 'paymentUrl should contain chargeId')
   assert(charge.metadata.chainId === '5042002', 'should default to Arc Testnet')
@@ -266,7 +269,20 @@ test('Renders HTML PDF (base64 roundtrip)', async () => {
 // Summary (only after every test has settled)
 // ─────────────────────────────────────────────
 
-await Promise.allSettled(pending)
+// Watchdog: a test that never settles must fail loudly instead of hanging
+// the script forever with no summary at all.
+const WATCHDOG_MS = 120_000
+let watchdogTimer: ReturnType<typeof setTimeout> | undefined
+const watchdog = new Promise<boolean>((resolve) => {
+  watchdogTimer = setTimeout(() => resolve(false), WATCHDOG_MS)
+})
+const allSettled = Promise.allSettled(pending).then(() => true)
+const settled = await Promise.race([allSettled, watchdog])
+clearTimeout(watchdogTimer)
+if (!settled) {
+  console.error(`\n  ✗ watchdog: tests did not settle within ${WATCHDOG_MS}ms`)
+  failed++
+}
 
 console.log(`\n─────────────────────────────────────────────`)
 console.log(`  ${passed} passed · ${failed} failed`)
