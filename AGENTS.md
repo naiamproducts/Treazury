@@ -94,7 +94,9 @@ screen; signup via `VITE_SHOW_REGISTER=true`).
   Studio: never edit them.
 - Contracts: Foundry (PaymentRouter + OrderVault, CREATE2); no test framework — checks:
   `bun scripts/test-commercial-docs.ts` (offline, reliable) and `bun scripts/test-modules.ts` (live Arc
-  RPC, may broadcast a testnet `createOrder`, stale exit code — see `GOOD_PRACTICES.md`); Playwright for e2e (`e2e/`); `forge test`
+  RPC, needs a cleared `VITE_ROUTER_OWNER_KEY` to stay broadcast-free, may broadcast a testnet
+  `createOrder` with a key set; awaits all tests before summarizing and exits non-zero on any
+  failure — see `GOOD_PRACTICES.md`); Playwright for e2e (`e2e/`); `forge test`
 
 ## Key structure
 

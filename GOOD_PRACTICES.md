@@ -30,8 +30,10 @@ practices only — product and domain rules live in `AGENTS.md`.
 - `bun run check` must be green. Note: it runs oxlint with `--fix`, so it can
   rewrite files — review the diff it produces.
 - Reliable offline check: `bun scripts/test-commercial-docs.ts` (28 checks, no network, no side effects).
-  `bun scripts/test-modules.ts` needs Arc RPC reachability or a cleared `VITE_ROUTER_OWNER_KEY`, may
-  broadcast a testnet `createOrder`, and its summary/exit code can be stale — do not trust its exit code.
+  `bun scripts/test-modules.ts` needs Arc RPC reachability or a cleared `VITE_ROUTER_OWNER_KEY`, and
+  with a key set it may broadcast a testnet `createOrder`; the harness awaits every test before
+  summarizing, so its summary and exit code are authoritative — it exits non-zero iff any test failed
+  (an Arc RPC outage shows up as a real failure, not a stale green).
 - Run the affected e2e specs: `bunx playwright test e2e/`. Prerequisites:
   `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` set, `bunx playwright
   install` (chromium), and a seeded live account (helpers hardcode a sandbox

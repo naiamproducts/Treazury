@@ -3,7 +3,8 @@
  * test-modules.ts — Local module test runner
  *
  * Runs entirely with Bun. No test framework needed: uses a minimal
- * assert utility and exits non-zero on first failure.
+ * assert utility, awaits every test before printing the summary, and
+ * exits non-zero if any test failed.
  *
  * Run from /home/user/app/:
  *   bun scripts/test-modules.ts
@@ -27,18 +28,25 @@ import type { Order, Tenant } from '../src/modules/shared/types'
 let passed = 0
 let failed = 0
 
+// Every test promise is collected here so the summary can await ALL tests
+// before it runs — a test that rejects after the summary would otherwise be
+// invisible to the pass/fail counters and to the exit code.
+const pending: Promise<void>[] = []
+
 function test(name: string, fn: () => void | Promise<void>): void {
-  Promise.resolve()
-    .then(() => fn())
-    .then(() => {
-      console.log(`  ✓ ${name}`)
-      passed++
-    })
-    .catch((err: unknown) => {
-      console.error(`  ✗ ${name}`)
-      console.error(`    ${err instanceof Error ? err.message : String(err)}`)
-      failed++
-    })
+  pending.push(
+    Promise.resolve()
+      .then(() => fn())
+      .then(() => {
+        console.log(`  ✓ ${name}`)
+        passed++
+      })
+      .catch((err: unknown) => {
+        console.error(`  ✗ ${name}`)
+        console.error(`    ${err instanceof Error ? err.message : String(err)}`)
+        failed++
+      }),
+  )
 }
 
 function assert(condition: boolean, message: string): void {
@@ -255,11 +263,11 @@ test('Renders HTML PDF (base64 roundtrip)', async () => {
 })
 
 // ─────────────────────────────────────────────
-// Summary (deferred to next microtask)
+// Summary (only after every test has settled)
 // ─────────────────────────────────────────────
 
-setTimeout(() => {
-  console.log(`\n─────────────────────────────────────────────`)
-  console.log(`  ${passed} passed · ${failed} failed`)
-  if (failed > 0) process.exit(1)
-}, 200)
+await Promise.allSettled(pending)
+
+console.log(`\n─────────────────────────────────────────────`)
+console.log(`  ${passed} passed · ${failed} failed`)
+if (failed > 0) process.exit(1)
