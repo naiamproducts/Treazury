@@ -52,8 +52,9 @@ Per `openspec/changes/import-export-pivot/tasks.md`:
 - **Phase 7.4** — final verification sweep (`bun run check`, full e2e,
   `forge test`, residual-Spanish grep).
 
-Out of scope: xlsx export (proposal.md:36 / design.md:11); own backend and
-mainnet (AGENTS.md product decisions).
+Out of scope: xlsx export (proposal.md:36 / design.md:11); own backend
+(AGENTS.md product decisions); mainnet — Arc Testnet only (AGENTS.md Onchain
+section and the `VITE_ROUTER_OWNER_KEY` bullet).
 
 ## Working practices
 
