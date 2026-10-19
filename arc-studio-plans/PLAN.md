@@ -14,7 +14,7 @@ invitation-only. Canonical copy: `src/i18n/en.ts` (landing hero keys).
 The old Vendify/WhatsApp payment-link PoC was replaced by the import/export
 pivot. Source of truth for the product:
 `openspec/changes/import-export-pivot/` (proposal, design, tasks, specs).
-This plan only tracks build state; when they disagree, openspec wins.
+This plan only tracks build state.
 
 ## What is built (verified 2026-10-18)
 
@@ -51,7 +51,9 @@ Per `openspec/changes/import-export-pivot/tasks.md`:
   (e2e 08).
 - **Phase 7.4** — final verification sweep (`bun run check`, full e2e,
   `forge test`, residual-Spanish grep).
-- Out of scope: xlsx export, own backend, mainnet.
+
+Out of scope: xlsx export (proposal.md:36 / design.md:11); own backend and
+mainnet (AGENTS.md product decisions).
 
 ## Working practices
 

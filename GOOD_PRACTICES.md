@@ -14,7 +14,8 @@ practices only — product and domain rules live in `AGENTS.md`.
   `src/modules/invoicing/engines/venezuela.ts` stays Spanish.
 - Spanish proper nouns and legal terms (RIF, SENIAT, IGTF) stay Spanish when
   technically required — as catalog values in `src/i18n/en.ts`, never hardcoded
-  in code (the exception never licenses a literal "RIF" label in a component).
+  in component/UI code (the exception never licenses a literal "RIF" label in a
+  component).
 
 ## Commits
 
@@ -28,13 +29,14 @@ practices only — product and domain rules live in `AGENTS.md`.
 
 - `bun run check` must be green. Note: it runs oxlint with `--fix`, so it can
   rewrite files — review the diff it produces.
-- Offline path (no Supabase/browser): `bun scripts/test-modules.ts` +
-  `bun scripts/test-commercial-docs.ts`.
+- Reliable offline check: `bun scripts/test-commercial-docs.ts` (28 checks, no network, no side effects).
+  `bun scripts/test-modules.ts` needs Arc RPC reachability or a cleared `VITE_ROUTER_OWNER_KEY`, may
+  broadcast a testnet `createOrder`, and its summary/exit code can be stale — do not trust its exit code.
 - Run the affected e2e specs: `bunx playwright test e2e/`. Prerequisites:
   `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` set, `bunx playwright
   install` (chromium), and a seeded live account (helpers hardcode a sandbox
   account). Missing env fails as login-locator timeouts (hangs), not env
-  errors; when offline fall back to `bun run check` + `bun scripts/test-*.ts`.
+  errors; when offline fall back to `bun run check` + `bun scripts/test-commercial-docs.ts`.
 - Docs-only changes state an explicit `N/A` instead of a test run.
 
 ## Docs hygiene
