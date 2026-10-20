@@ -2,9 +2,9 @@
  * en — single-locale English message catalog (import-export-pivot,
  * openspec/changes/import-export-pivot/design.md, Architecture Decisions #12).
  *
- * Flat dotted keys, 17 namespaces: landing, auth, access, shell, orders,
- * catalog, customers, charges, settings, funds, pay, wallet, country,
- * approval, docs, partners, errors. Single locale `en`; no provider/context machinery —
+ * Flat dotted keys, 18 namespaces: landing, legal, auth, access, shell,
+ * orders, catalog, customers, charges, settings, funds, pay, wallet,
+ * country, approval, docs, partners, errors. Single locale `en`; no provider/context machinery —
  * consumers import `t()` from './t'. Consumed by PR2 (landing), PR7a
  * (auth, access, orders, catalog), PR7b (shell, customers, charges,
  * settings, funds, country, approval); docs/partners land with Phases 3–6.
@@ -72,6 +72,36 @@ export const en = {
   'landing.terms.privacy': 'and Privacy.',
   'landing.terms.dismiss': 'Got it',
   'landing.terms.dismissAria': 'Dismiss terms notice',
+
+  // ── legal (Landing Terms & Privacy dialog — LandingPage.tsx) ─────────────
+  'legal.title.terms': 'Terms of Service (Alpha)',
+  'legal.title.privacy': 'Privacy Notice (Alpha)',
+  'legal.close': 'Close',
+  'legal.closeAria': 'Close dialog',
+  'legal.terms.operator':
+    'The Treazury platform is operated by Exponencial INC SAS, registered in Córdoba, Argentina ("Treazury", "we", "us"). Treazury is technology: software for creating USDC payment links and organizing commercial documents for import/export businesses.',
+  'legal.terms.role':
+    'We are not a party to any transaction between users. Trades, goods, services, prices and delivery terms are agreed directly between the parties; Treazury does not buy, sell, broker or intermediate goods or services.',
+  'legal.terms.custody':
+    "Payments are self-custodial: USDC moves directly between the buyer's and the seller's own wallets on the blockchain. Treazury never custodies, receives, holds, transmits or controls user funds or private keys, and cannot reverse, refund or recover on-chain transfers.",
+  'legal.terms.thirdParties':
+    'The Platform depends on third-party networks and providers (blockchain networks, wallet software, stablecoin issuers and integrators). Their availability, security and performance are outside our control, and use of them is at your own risk. You are solely responsible for your wallets and keys.',
+  'legal.terms.alpha':
+    'Treazury is in invitation-only Alpha. Accounts are approved individually, features may change at any time, and the Platform currently operates on Arc Testnet, where assets have no real value. The service is provided "as available", without warranties of any kind, to the extent permitted by applicable law.',
+  'legal.terms.liability':
+    'To the maximum extent permitted by applicable law, Treazury and Exponencial INC SAS are not liable for indirect, incidental or consequential damages, nor for losses arising from self-custody, third-party services, or misuse of the Platform. These Alpha terms may be updated as the service evolves; continued use constitutes acceptance.',
+  'legal.privacy.intro':
+    'This notice explains how Exponencial INC SAS (Córdoba, Argentina), operator of Treazury, handles personal data of Platform users during the Alpha.',
+  'legal.privacy.data':
+    'We process the data needed to operate the service: account and authentication data (e.g. email), wallet addresses, and the business content you enter (customers, products, orders, commercial documents).',
+  'legal.privacy.providers':
+    'Data is processed through our infrastructure providers — database, authentication and embedded wallet services — under our instructions. We do not sell personal data.',
+  'legal.privacy.blockchain':
+    'Wallet addresses and transactions recorded on the blockchain are public by design; we do not control the blockchain and cannot delete them.',
+  'legal.privacy.technical':
+    'We may process technical data (logs, diagnostics) to operate, secure and improve the Platform.',
+  'legal.privacy.rights':
+    'You may request access, correction or deletion of your data through the contact channels available on the Platform. This Alpha privacy notice may evolve as the service changes.',
 
   // ── auth (PR7a — AuthPage consumers) ─────────────────────────────────────
   'auth.tagline': 'B2B payment links in USDC',

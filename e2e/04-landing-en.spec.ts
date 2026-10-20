@@ -247,4 +247,32 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
       'en_US'
     )
   })
+
+  test('L-R5: banner Terms and Privacy links open the legal dialog', async ({ page }) => {
+    await page.goto('/')
+    // The terms banner renders on load; its Terms/Privacy entries are now
+    // buttons (exact full-string names, since the ✕ dismiss carries the
+    // aria-label "Dismiss terms notice" which case-insensitively contains
+    // "terms").
+    const termsButton = page.getByRole('button', { name: 'Terms', exact: true })
+    await expect(termsButton).toBeVisible()
+    // Terms dialog: role=dialog, titled, names the operating entity.
+    await termsButton.click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toContainText('Exponencial INC SAS')
+    await expect(
+      dialog.getByRole('heading', { name: 'Terms of Service (Alpha)' })
+    ).toBeVisible()
+    // Escape closes the dialog (keydown on the focused dialog container).
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+    // Privacy dialog: opened independently (the banner was not dismissed by
+    // opening the first dialog); closed via the ✕ button.
+    await page.getByRole('button', { name: 'and Privacy.', exact: true }).click()
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toContainText('We do not sell personal data')
+    await page.getByRole('button', { name: 'Close dialog' }).click()
+    await expect(dialog).toBeHidden()
+  })
 })

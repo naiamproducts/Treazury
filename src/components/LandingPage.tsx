@@ -8,9 +8,12 @@
  * which routes into the app auth flow (App stage 'landing' -> 'auth').
  * The hero card hosts the access-request form (AccessRequestForm); that
  * component keeps its own strings until the app-shell EN sweep (Phase 7).
+ * The terms banner's Terms/Privacy links open an in-page legal dialog
+ * (legal.* catalog keys) instead of dead in-page anchors.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import AccessRequestForm from './AccessRequestForm'
 import { t } from '../i18n/t'
 
@@ -45,8 +48,117 @@ const FLOW_STEPS = [
   t('landing.flow.step3'),
 ]
 
+/** Legal dialog flavors opened from the terms banner. */
+type LegalDoc = 'terms' | 'privacy'
+
+/** Ordered paragraphs rendered inside the legal dialog (formal `<ol>`). */
+const LEGAL_PARAGRAPHS: Record<LegalDoc, string[]> = {
+  terms: [
+    t('legal.terms.operator'),
+    t('legal.terms.role'),
+    t('legal.terms.custody'),
+    t('legal.terms.thirdParties'),
+    t('legal.terms.alpha'),
+    t('legal.terms.liability'),
+  ],
+  privacy: [
+    t('legal.privacy.intro'),
+    t('legal.privacy.data'),
+    t('legal.privacy.providers'),
+    t('legal.privacy.blockchain'),
+    t('legal.privacy.technical'),
+    t('legal.privacy.rights'),
+  ],
+}
+
+/**
+ * LegalDialog — Terms of Service / Privacy Notice popup opened from the
+ * landing terms banner. Luxe-dark glass card mirroring CountrySetupModal
+ * (framer-motion enter/exit over a dark translucent backdrop). Fully
+ * accessible: role="dialog", aria-modal, aria-labelledby title, Escape and
+ * backdrop click close, the container takes focus on open. Body scroll is
+ * locked while open. All copy comes from the i18n catalog (legal.* keys).
+ */
+function LegalDialog({ doc, onClose }: { doc: LegalDoc; onClose: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Move focus into the dialog when it opens so keyboard users land inside.
+  useEffect(() => {
+    containerRef.current?.focus()
+  }, [])
+
+  // Lock body scroll while the dialog is open; restore on close/unmount.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  const titleId = `legal-dialog-title-${doc}`
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[60] flex items-center justify-center px-4 font-sans"
+      style={{ background: 'rgba(7,8,10,0.72)', backdropFilter: 'blur(8px)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={event => {
+          if (event.key === 'Escape') onClose()
+        }}
+        onClick={event => event.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.94, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+        className="luxe-glass w-full max-w-xl rounded-[2rem] p-6 sm:p-8 max-h-[85vh] overflow-y-auto outline-none"
+        data-purpose="legal-dialog"
+      >
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <h2 id={titleId} className="font-serif text-2xl font-medium text-white">
+            {doc === 'terms' ? t('legal.title.terms') : t('legal.title.privacy')}
+          </h2>
+          <button
+            type="button"
+            aria-label={t('legal.closeAria')}
+            onClick={onClose}
+            className="text-slate-400 hover:text-white text-xs transition-colors cursor-pointer px-1 shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+        <ol className="list-decimal list-outside pl-5 space-y-4">
+          {LEGAL_PARAGRAPHS[doc].map(paragraph => (
+            <li key={paragraph} className="text-sm font-light leading-relaxed text-slate-300">
+              {paragraph}
+            </li>
+          ))}
+        </ol>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-6 flex w-full items-center justify-center rounded-full bg-white py-3.5 font-mono text-xs font-medium uppercase tracking-wider text-black transition-all hover:bg-slate-100 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.25)] cursor-pointer"
+        >
+          {t('legal.close')}
+        </button>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 export default function LandingPage({ onEnterApp, showRegister }: LandingPageProps) {
   const [termsVisible, setTermsVisible] = useState(true)
+  const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null)
 
   const heroCtaLabel = showRegister ? t('landing.hero.cta.register') : t('landing.hero.cta.login')
 
@@ -301,15 +413,20 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
               <div className="w-2 h-2 rounded-full bg-icyCyan animate-pulse"></div>
               <p className="text-xs text-slate-300 font-light leading-none">
                 {t('landing.terms.prefix')}{' '}
-                <a className="text-white underline decoration-white/40 hover:decoration-white font-medium" href="#terms">
+                <button
+                  type="button"
+                  onClick={() => setLegalDoc('terms')}
+                  className="text-white underline decoration-white/40 hover:decoration-white font-medium cursor-pointer"
+                >
                   {t('landing.terms.terms')}
-                </a>{' '}
-                <a
-                  className="text-white underline decoration-white/40 hover:decoration-white font-medium"
-                  href="#privacy"
+                </button>{' '}
+                <button
+                  type="button"
+                  onClick={() => setLegalDoc('privacy')}
+                  className="text-white underline decoration-white/40 hover:decoration-white font-medium cursor-pointer"
                 >
                   {t('landing.terms.privacy')}
-                </a>
+                </button>
               </p>
             </div>
             <div className="flex items-center gap-3 shrink-0">
@@ -332,6 +449,12 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
           </div>
         </aside>
       )}
+
+      {/* Legal popup (Terms / Privacy) — opened from the terms banner links.
+          Banner dismiss stays independent: opening a dialog never closes it. */}
+      <AnimatePresence>
+        {legalDoc && <LegalDialog doc={legalDoc} onClose={() => setLegalDoc(null)} />}
+      </AnimatePresence>
     </div>
   )
 }
