@@ -205,7 +205,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                 <div className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
                   <img
                     src="/logos/circle-usdc.svg"
-                    alt={t('landing.ticker.circle')}
+                    alt=""
                     className="h-3.5 w-auto"
                   />
                   <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
@@ -216,7 +216,7 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
                 <div className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer">
                   <img
                     src="/logos/privy.svg"
-                    alt={t('landing.ticker.privy')}
+                    alt=""
                     className="h-3.5 w-auto"
                   />
                   <span className="font-mono text-[10px] tracking-wider uppercase font-semibold text-slate-300">
