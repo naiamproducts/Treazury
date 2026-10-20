@@ -54,7 +54,7 @@ const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 // Public fallback backend: no secret, safe to hardcode (same value the
 // frontend's viem public client uses).
-const PUBLIC_RPC_URL = "https://rpc.testnet.arc.network";
+const PUBLIC_RPC_URL = "https://rpc.testnet.arc.io";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HASH_RE = /^0x[0-9a-fA-F]{64}$/;
