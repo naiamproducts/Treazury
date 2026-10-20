@@ -1,0 +1,18 @@
+<!-- Treazury favicon: serif T + icyCyan dot — source of truth for the raster favicon (favicon-150x150.png). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150" width="150" height="150">
+  <defs>
+    <filter id="dotGlow" x="-150%" y="-150%" width="400%" height="400%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="150" height="150" rx="32" fill="#000000"/>
+  <g fill="#FFFFFF">
+    <rect x="32" y="36" width="70" height="11"/>
+    <rect x="32" y="47" width="13" height="9"/>
+    <rect x="89" y="47" width="13" height="9"/>
+    <rect x="59" y="47" width="16" height="65"/>
+    <rect x="44" y="101" width="46" height="11"/>
+  </g>
+  <circle cx="110" cy="105" r="7" fill="#a5f3fc" opacity="0.7" filter="url(#dotGlow)"/>
+  <circle cx="110" cy="105" r="7" fill="#a5f3fc"/>
+</svg>
