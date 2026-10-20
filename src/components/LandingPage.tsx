@@ -75,17 +75,34 @@ const LEGAL_PARAGRAPHS: Record<LegalDoc, string[]> = {
  * LegalDialog — Terms of Service / Privacy Notice popup opened from the
  * landing terms banner. Luxe-dark glass card mirroring CountrySetupModal
  * (framer-motion enter/exit over a dark translucent backdrop). Fully
- * accessible: role="dialog", aria-modal, aria-labelledby title, Escape and
- * backdrop click close, the container takes focus on open. Body scroll is
- * locked while open. All copy comes from the i18n catalog (legal.* keys).
+ * accessible: role="dialog", aria-modal, aria-labelledby title, the container
+ * takes focus on open, Escape is handled at document level (the dialog has no
+ * focus trap, so focus may sit outside the container), and dismissal by
+ * backdrop pointer-down requires the press to have STARTED on the backdrop
+ * (a drag that started inside the card and released over the backdrop does
+ * not close). Body scroll is locked while open. All copy comes from the i18n
+ * catalog (legal.* keys).
  */
 function LegalDialog({ doc, onClose }: { doc: LegalDoc; onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  // True only when the pointer-down that led to a click started on the
+  // backdrop itself (not inside the card) — see the backdrop handlers below.
+  const backdropArmedRef = useRef(false)
 
   // Move focus into the dialog when it opens so keyboard users land inside.
   useEffect(() => {
     containerRef.current?.focus()
   }, [])
+
+  // Close on Escape from anywhere — the dialog has no focus trap, so focus
+  // may legitimately sit outside the container.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
 
   // Lock body scroll while the dialog is open; restore on close/unmount.
   useEffect(() => {
@@ -105,7 +122,13 @@ function LegalDialog({ doc, onClose }: { doc: LegalDoc; onClose: () => void }) {
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[60] flex items-center justify-center px-4 font-sans"
       style={{ background: 'rgba(7,8,10,0.72)', backdropFilter: 'blur(8px)' }}
-      onClick={onClose}
+      onPointerDown={event => {
+        backdropArmedRef.current = event.target === event.currentTarget
+      }}
+      onClick={() => {
+        if (backdropArmedRef.current) onClose()
+        backdropArmedRef.current = false
+      }}
     >
       <motion.div
         ref={containerRef}
@@ -113,9 +136,6 @@ function LegalDialog({ doc, onClose }: { doc: LegalDoc; onClose: () => void }) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        onKeyDown={event => {
-          if (event.key === 'Escape') onClose()
-        }}
         onClick={event => event.stopPropagation()}
         initial={{ opacity: 0, scale: 0.94, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}

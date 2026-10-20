@@ -275,4 +275,38 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
     await page.getByRole('button', { name: 'Close dialog' }).click()
     await expect(dialog).toBeHidden()
   })
+
+  test('L-R6: card-to-backdrop drag keeps the dialog open; Escape closes from outside', async ({ page }) => {
+    await page.goto('/')
+    // Wait for the terms banner exactly like L-R5 does, then open Terms.
+    const termsButton = page.getByRole('button', { name: 'Terms', exact: true })
+    await expect(termsButton).toBeVisible()
+    await termsButton.click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toHaveAttribute('data-purpose', 'legal-dialog')
+
+    // Raw-mouse drag from inside the card to outside it (deterministic):
+    // pointer-down on a card descendant + pointer-up on the backdrop must
+    // NOT dismiss — the press did not START on the backdrop.
+    const box = await dialog.boundingBox()
+    if (!box) throw new Error('legal dialog has no bounding box')
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width + 80, box.y + box.height / 2, { steps: 8 })
+    await page.mouse.up()
+    // Still open after the out-of-card drag (this failed before the fix).
+    await expect(dialog).toBeVisible()
+
+    // Tab out of the dialog: container -> ✕ -> Close -> focus leaves the card.
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Tab')
+    await expect(dialog).toBeVisible()
+
+    // Escape still closes with focus OUTSIDE the container (document-level
+    // listener; this failed when Escape was a container onKeyDown only).
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+  })
 })
