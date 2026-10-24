@@ -46,6 +46,21 @@ English.
 - WHEN the copy is inspected
 - THEN all copy is English
 
+### Requirement: Stablecoin rail abroad, local bank payout at destination
+
+The landing page MUST present settlement as a stablecoin rail for the cross-border leg combined with a
+regulated liquidity partner at destination delivering a local bank transfer (SEPA Instant or ACH) to the
+supplier, whose bank deposit produces the interbank receipt used for customs payment closure. The landing
+MUST NOT claim that the platform performs customs clearance or guarantees full customs compliance; the
+customs claim is limited to that interbank receipt supporting payment closure.
+
+#### Scenario: Bank last-mile stated, customs claim bounded
+
+- GIVEN a visitor reads the landing page
+- WHEN the settlement flow and the payment-to-document story are described
+- THEN the local bank payout at destination and the supplier's bank deposit producing the interbank receipt are stated
+- AND no copy claims the platform performs customs clearance or guarantees full customs compliance
+
 ## Assumptions
 
 - The landing page reuses the existing luxe-dark design tokens from DESIGN.md.

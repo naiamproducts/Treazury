@@ -181,7 +181,7 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
     // Cost
     await expect(page.getByText('Cost', { exact: true })).toBeVisible()
     await expect(page.getByText('Intermediary fees plus FX spreads')).toBeVisible()
-    await expect(page.getByText('One flat network fee')).toBeVisible()
+    await expect(page.getByText('Transparent pricing — no correspondent deductions')).toBeVisible()
     // Visibility
     await expect(page.getByText('Visibility', { exact: true })).toBeVisible()
     await expect(page.getByText('Opaque correspondent chain')).toBeVisible()
@@ -200,6 +200,11 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
     expect(statementText).toMatch(/commercial documents .* released/i)
     expect(statementText).toMatch(/commercial invoice and packing list/i)
     expect(statementText).toMatch(/PDF or CSV/i)
+    // Bank last-mile (swift-alternative-landing: stablecoin rail abroad →
+    // local bank payout at destination → interbank receipt for customs
+    // payment closure; no platform-performed customs claim).
+    expect(statementText).toMatch(/SEPA Instant or ACH/i)
+    expect(statementText).toMatch(/interbank receipt that closes your customs payment/i)
   })
 
   test('L-R4 + I18N-R1: locale en and no Spanish copy on landing', async ({ page }) => {
@@ -241,7 +246,10 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
     const ogTitle = page.locator('meta[property="og:title"]')
     await expect(ogTitle).toHaveAttribute('content', /USDC settlement/i)
     const ogDescription = page.locator('meta[property="og:description"]')
-    await expect(ogDescription).toHaveAttribute('content', /crypto alternative to SWIFT/i)
+    await expect(ogDescription).toHaveAttribute(
+      'content',
+      /crypto alternative to SWIFT.*pay out to your supplier's local bank/i
+    )
     await expect(page.locator('meta[property="og:locale"]')).toHaveAttribute(
       'content',
       'en_US'
