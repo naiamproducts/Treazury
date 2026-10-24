@@ -26,7 +26,7 @@ export const en = {
   'landing.hero.badge': 'For import/export agencies',
   'landing.hero.title.line1': 'Settle cross-border trade',
   'landing.hero.title.line2': 'for your clients,',
-  'landing.hero.title.line3': 'in USDC — without SWIFT.',
+  'landing.hero.title.line3': 'in crypto dollars — to their bank in 2–6 hours.',
   'landing.hero.subtitle':
     "Treazury is the settlement layer for import/export agencies: USDC payment links that settle in minutes and pay out into your supplier's local bank account, with full on-chain visibility, and commercial documents released the moment an order is paid. Accounts approved one by one.",
   'landing.hero.cta.register': 'Create free account',

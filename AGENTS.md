@@ -3,7 +3,7 @@
 > USDC settlement platform + commercial documentation for import/export
 > agencies — "The crypto alternative to SWIFT". Alpha, invitation-only.
 > Canonical copy lives in `src/i18n/en.ts` (landing hero keys): "Settle
-> cross-border trade for your clients, in USDC — without SWIFT."
+> cross-border trade for your clients, in crypto dollars — to their bank in 2–6 hours."
 > (`index.html` carries different meta copy.)
 
 Product source of truth: `openspec/changes/import-export-pivot/` (proposal,
