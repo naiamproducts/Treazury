@@ -28,7 +28,7 @@ export const en = {
   'landing.hero.title.line2': 'for your clients,',
   'landing.hero.title.line3': 'in crypto dollars — to their bank in 2–6 hours.',
   'landing.hero.subtitle':
-    "Treazury is the settlement layer for import/export agencies: USDC payment links that settle in minutes and pay out into your supplier's local bank account, with full on-chain visibility, and commercial documents released the moment an order is paid. Accounts approved one by one.",
+    "Treazury is the settlement layer for import/export agencies: USDC payment links that pay out to your supplier's local bank account in 2–6 hours, with full on-chain visibility, and commercial documents released the moment an order is paid. Accounts approved one by one.",
   'landing.hero.cta.register': 'Create free account',
   'landing.hero.cta.login': 'Enter the dashboard',
   'landing.hero.regions.argentina': 'ARGENTINA',
@@ -39,7 +39,7 @@ export const en = {
   'landing.trust.custodyLabel': 'Self-custody',
   'landing.trust.usdcValue': 'USDC',
   'landing.trust.usdcLabel': "Paid into the supplier's bank",
-  'landing.trust.speedValue': 'Minutes',
+  'landing.trust.speedValue': 'Hours',
   'landing.trust.speedLabel': 'Not 2–5 days',
   'landing.comparison.heading': 'Why agencies move off SWIFT',
   'landing.comparison.subheading':
@@ -49,7 +49,7 @@ export const en = {
   'landing.comparison.col.usdc': 'USDC on Treazury',
   'landing.comparison.speed.label': 'Speed',
   'landing.comparison.speed.swift': '2–5 business days per leg',
-  'landing.comparison.speed.usdc': 'Minutes, around the clock',
+  'landing.comparison.speed.usdc': '2–6 hours, end to end',
   'landing.comparison.cost.label': 'Cost',
   'landing.comparison.cost.swift': 'Intermediary fees plus FX spreads',
   'landing.comparison.cost.usdc': 'Transparent pricing — no correspondent deductions',

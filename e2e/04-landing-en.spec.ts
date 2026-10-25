@@ -177,7 +177,7 @@ test.describe('Landing — English agency landing (L-R1..L-R4, I18N-R1/R3)', () 
     // Speed
     await expect(page.getByText('Speed', { exact: true })).toBeVisible()
     await expect(page.getByText('2–5 business days per leg')).toBeVisible()
-    await expect(page.getByText('Minutes, around the clock')).toBeVisible()
+    await expect(page.getByText('2–6 hours, end to end')).toBeVisible()
     // Cost
     await expect(page.getByText('Cost', { exact: true })).toBeVisible()
     await expect(page.getByText('Intermediary fees plus FX spreads')).toBeVisible()

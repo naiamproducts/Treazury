@@ -4,7 +4,7 @@
 
 Serve **import/export agencies** as the crypto alternative to SWIFT for settling client
 trade cross-border. SWIFT: 2–5 days, fees+spreads+intermediaries, low visibility. USDC:
-minutes, self-custody, traceable.
+2–6 hours, self-custody, traceable.
 
 ## Scope
 
