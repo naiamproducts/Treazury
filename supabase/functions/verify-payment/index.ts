@@ -214,7 +214,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json(400, { status: "error", reason: "malformed_payload" });
   }
 
-  const rpcUrl = Deno.env.get("ALCHEMY_RPC_URL") ?? `https://arc-testnet.g.alchemy.com/v2/${apiKey}`;
+  const rpcUrl = Deno.env.get("ALCHEMY_RPC_URL");
+  if (!rpcUrl) {
+    return json(503, { status: "error", reason: "misconfigured" });
+  }
   const db = createClient(supabaseUrl, serviceKey);
 
   let applied = 0;
