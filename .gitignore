@@ -38,3 +38,5 @@ Thumbs.db
 .archify/
 test-results/
 .atl/
+
+__pycache__/
