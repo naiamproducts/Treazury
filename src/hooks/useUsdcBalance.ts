@@ -1,5 +1,5 @@
 /**
- * useUsdcBalance — polls the merchant's USDC balance on Arc Testnet.
+ * useUsdcBalance — polls the merchant's USDC balance on Arc (mainnet).
  *
  * Reuses the same viem public-client + erc20Abi pattern as PaymentPage so
  * the dashboard and the payment page read the chain the same way.
@@ -8,11 +8,11 @@
 
 import { useEffect, useState } from 'react'
 import { createPublicClient, http, erc20Abi } from 'viem'
-import { arcTestnet } from 'viem/chains'
 import { getUsdc, USDC_DECIMALS } from '@/onchain-facts'
+import { arc, ARC_MAINNET_CHAIN_ID } from '@/lib/arc-chain'
 
-const ARC_TESTNET_CHAIN_ID = 5042002
-const client = createPublicClient({ chain: arcTestnet, transport: http() })
+const ARC_CHAIN_ID = ARC_MAINNET_CHAIN_ID
+const client = createPublicClient({ chain: arc, transport: http() })
 const POLL_MS = 15_000
 
 export function useUsdcBalance(address: string | null | undefined): {
@@ -25,7 +25,7 @@ export function useUsdcBalance(address: string | null | undefined): {
 
   useEffect(() => {
     if (!validAddress || !address) return
-    const usdc = getUsdc(ARC_TESTNET_CHAIN_ID)
+    const usdc = getUsdc(ARC_CHAIN_ID)
     if (!usdc) return
 
     let cancelled = false

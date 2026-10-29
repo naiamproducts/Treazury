@@ -17,7 +17,7 @@ export interface SDKConfig {
   apiKey: string
   /** Circle Entity Secret — LEGACY, server-side only (see apiKey). */
   entitySecret: string
-  /** Chain ID to operate on. Defaults to Arc Testnet (5042002) */
+  /** Chain ID to operate on. Defaults to Arc mainnet (5042) */
   chainId?: number
 }
 

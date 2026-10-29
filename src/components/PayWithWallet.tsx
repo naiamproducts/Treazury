@@ -21,10 +21,11 @@ import { erc20Abi, parseSignature, type Address } from 'viem'
 import { Loader2, CheckCircle2, ExternalLink, AlertCircle } from 'lucide-react'
 import { getUsdc, buildTxExplorerUrl } from '@/onchain-facts'
 import { parseAmount, Amount, usdcDecimalsFor } from '@/onchain-money'
+import { ARC_MAINNET_CHAIN_ID } from '@/lib/arc-chain'
 import { t } from '../i18n/t'
 
-const ARC_TESTNET_CHAIN_ID = 5042002
-const usdcFact = getUsdc(ARC_TESTNET_CHAIN_ID)!
+const ARC_CHAIN_ID = ARC_MAINNET_CHAIN_ID
+const usdcFact = getUsdc(ARC_CHAIN_ID)!
 const USDC_ADDRESS = usdcFact.address as `0x${string}`
 
 // Luxe-dark row: label + value on a translucent dark surface.
@@ -81,7 +82,7 @@ const PERMIT_TYPES = {
 const USDC_PERMIT_DOMAIN = {
   name: 'USDC',
   version: '2',
-  chainId: ARC_TESTNET_CHAIN_ID,
+  chainId: ARC_CHAIN_ID,
   verifyingContract: USDC_ADDRESS,
 } as const
 
@@ -124,13 +125,13 @@ export default function PayWithWallet({
 }: PayWithWalletProps) {
   const { address, isConnected, chainId } = useAccount()
   const { switchChain } = useSwitchChain()
-  const publicClient = usePublicClient({ chainId: ARC_TESTNET_CHAIN_ID })
+  const publicClient = usePublicClient({ chainId: ARC_CHAIN_ID })
   const [depositFired, setDepositFired] = useState(false)
   const [fallbackMode, setFallbackMode] = useState(false)
   const [permitError, setPermitError] = useState('')
   const [successNotified, setSuccessNotified] = useState(false)
 
-  const wrongChain = isConnected && chainId !== ARC_TESTNET_CHAIN_ID
+  const wrongChain = isConnected && chainId !== ARC_CHAIN_ID
 
   // Payer's USDC balance
   const { data: rawBalance, isLoading: balanceLoading } = useReadContract({
@@ -138,19 +139,19 @@ export default function PayWithWallet({
     abi: erc20Abi,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
-    chainId: ARC_TESTNET_CHAIN_ID,
+    chainId: ARC_CHAIN_ID,
     query: { enabled: !!address },
   })
 
   const formattedBalance = rawBalance
-    ? Amount.fromRaw(rawBalance, usdcDecimalsFor(ARC_TESTNET_CHAIN_ID)).toFixed(2)
+    ? Amount.fromRaw(rawBalance, usdcDecimalsFor(ARC_CHAIN_ID)).toFixed(2)
     : null
 
   // Parse amount
   let parsedAmount: bigint | null = null
   let parseError = ''
   try {
-    if (amount) parsedAmount = parseAmount(ARC_TESTNET_CHAIN_ID, amount).raw
+    if (amount) parsedAmount = parseAmount(ARC_CHAIN_ID, amount).raw
   } catch {
     parseError = t('pay.error.invalidAmount')
   }
@@ -191,13 +192,13 @@ export default function PayWithWallet({
   const { signTypedDataAsync, isPending: signPending } = useSignTypedData()
 
   const { isLoading: permitTxConfirming, isSuccess: permitTxSuccess } =
-    useWaitForTransactionReceipt({ hash: permitTxHash, chainId: ARC_TESTNET_CHAIN_ID })
+    useWaitForTransactionReceipt({ hash: permitTxHash, chainId: ARC_CHAIN_ID })
   const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash, chainId: ARC_TESTNET_CHAIN_ID })
+    useWaitForTransactionReceipt({ hash: approveHash, chainId: ARC_CHAIN_ID })
   const { isLoading: depositConfirming, isSuccess: depositSuccess } =
-    useWaitForTransactionReceipt({ hash: depositHash, chainId: ARC_TESTNET_CHAIN_ID })
+    useWaitForTransactionReceipt({ hash: depositHash, chainId: ARC_CHAIN_ID })
   const { isLoading: transferConfirming, isSuccess: transferSuccess } =
-    useWaitForTransactionReceipt({ hash: transferHash, chainId: ARC_TESTNET_CHAIN_ID })
+    useWaitForTransactionReceipt({ hash: transferHash, chainId: ARC_CHAIN_ID })
 
   // One-shot: once the fallback approve confirms, fire the atomic deposit.
   if (approveSuccess && approveHash && !depositFired) {
@@ -208,7 +209,7 @@ export default function PayWithWallet({
         abi: VAULT_ABI,
         functionName: 'deposit',
         args: [parsedAmount as bigint],
-        chainId: ARC_TESTNET_CHAIN_ID,
+        chainId: ARC_CHAIN_ID,
       },
       { onError: () => setDepositFired(false) },
     )
@@ -223,10 +224,10 @@ export default function PayWithWallet({
     onSuccess?.(finalTxHash)
   }
 
-  const txUrl = finalTxHash ? buildTxExplorerUrl(ARC_TESTNET_CHAIN_ID, finalTxHash) : null
+  const txUrl = finalTxHash ? buildTxExplorerUrl(ARC_CHAIN_ID, finalTxHash) : null
 
   const handlePay = async () => {
-    if (wrongChain) { switchChain({ chainId: ARC_TESTNET_CHAIN_ID }); return }
+    if (wrongChain) { switchChain({ chainId: ARC_CHAIN_ID }); return }
     if (!parsedAmount || !recipientAddress) return
     setPermitError('')
 
@@ -236,7 +237,7 @@ export default function PayWithWallet({
         abi: erc20Abi,
         functionName: 'transfer',
         args: [recipientAddress as `0x${string}`, parsedAmount],
-        chainId: ARC_TESTNET_CHAIN_ID,
+        chainId: ARC_CHAIN_ID,
       })
       return
     }
@@ -269,7 +270,7 @@ export default function PayWithWallet({
         abi: VAULT_ABI,
         functionName: 'depositWithPermit',
         args: [parsedAmount, deadline, Number(v), r, s],
-        chainId: ARC_TESTNET_CHAIN_ID,
+        chainId: ARC_CHAIN_ID,
       })
     } catch (err) {
       if (isUserRejection(err)) {
@@ -283,7 +284,7 @@ export default function PayWithWallet({
         abi: erc20Abi,
         functionName: 'approve',
         args: [recipientAddress as `0x${string}`, parsedAmount],
-        chainId: ARC_TESTNET_CHAIN_ID,
+        chainId: ARC_CHAIN_ID,
       })
     }
   }

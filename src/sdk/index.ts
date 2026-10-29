@@ -29,7 +29,7 @@ import { paymentFactory, USDCArcProvider } from '@/modules/payments'
 
 export type { Charge, ChargeStatus, ChargeStatusResult, SDKConfig }
 
-const ARC_TESTNET_CHAIN_ID = 5042002
+const ARC_CHAIN_ID = 5042
 
 // Register built-in providers once.
 // Additional providers (santander_pay, etc.) are registered by the host app
@@ -39,7 +39,7 @@ function ensureDefaultProviders(baseUrl: string): void {
     paymentFactory.register(
       new USDCArcProvider({
         paymentPageBaseUrl: baseUrl,
-        chainId: ARC_TESTNET_CHAIN_ID,
+        chainId: ARC_CHAIN_ID,
       }),
     )
   }
@@ -53,7 +53,7 @@ export class PayStyleSDK {
   constructor(config: SDKConfig, baseUrl?: string) {
     this.config = {
       ...config,
-      chainId: config.chainId ?? ARC_TESTNET_CHAIN_ID,
+      chainId: config.chainId ?? ARC_CHAIN_ID,
     }
     this.baseUrl = baseUrl ?? (typeof window !== 'undefined' ? window.location.origin : '')
     ensureDefaultProviders(this.baseUrl)

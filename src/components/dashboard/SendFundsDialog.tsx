@@ -4,7 +4,7 @@
  * Replaces the dead link to app.arc.io: the payout wallet is a Privy
  * embedded wallet owned by the merchant, so app.arc.io cannot manage it.
  * The send is signed locally with the embedded wallet's EIP-1193 provider
- * and broadcast onchain with viem over Arc Testnet.
+ * and broadcast onchain with viem over Arc (mainnet).
  *
  * We never custody keys: Privy signs on the client and the app only builds
  * the ERC-20 transfer transaction.
@@ -14,19 +14,19 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Send, ExternalLink, AlertCircle, Loader2 } from 'lucide-react'
 import { createPublicClient, createWalletClient, custom, erc20Abi, http, isAddress } from 'viem'
-import { arcTestnet } from 'viem/chains'
 import { useWallets } from '@privy-io/react-auth'
 import { getUsdc } from '@/onchain-facts'
 import { parseUsdc, formatUsdc } from '@/onchain-money'
+import { arc, ARC_MAINNET_CHAIN_ID } from '@/lib/arc-chain'
 import { useUsdcBalance } from '@/hooks/useUsdcBalance'
 import { t } from '@/i18n/t'
 import { storeErrorMessage } from './CatalogView'
 
-const ARC_TESTNET_CHAIN_ID = 5042002
-const usdcFact = getUsdc(ARC_TESTNET_CHAIN_ID)!
+const ARC_CHAIN_ID = ARC_MAINNET_CHAIN_ID
+const usdcFact = getUsdc(ARC_CHAIN_ID)!
 const USDC_ADDRESS = usdcFact.address as `0x${string}`
 
-const publicClient = createPublicClient({ chain: arcTestnet, transport: http() })
+const publicClient = createPublicClient({ chain: arc, transport: http() })
 
 const inputStyle = { background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--ink)' }
 const inputCls = 'w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-all'
@@ -83,7 +83,7 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
         const provider = await wallet.getEthereumProvider()
         const walletClient = createWalletClient({
           account: senderAddress as `0x${string}`,
-          chain: arcTestnet,
+          chain: arc,
           transport: custom(provider),
         })
         const hash = await walletClient.writeContract({
@@ -91,7 +91,7 @@ export default function SendFundsDialog({ open, onClose, senderAddress }: SendFu
           abi: erc20Abi,
           functionName: 'transfer',
           args: [recipient.trim() as `0x${string}`, amountNum],
-          chain: arcTestnet,
+          chain: arc,
         })
         setTxHash(hash)
         setStatus('pending')

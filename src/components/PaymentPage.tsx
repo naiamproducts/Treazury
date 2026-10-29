@@ -17,13 +17,13 @@
 import { useState, useEffect } from 'react'
 import { isAddress } from 'viem'
 import { createPublicClient, http, erc20Abi } from 'viem'
-import { arcTestnet } from 'viem/chains'
 import { TokenUSDC } from '@web3icons/react'
 import { Landmark, Wallet, CreditCard, ChevronDown, Copy, Check, CheckCircle2, Clock, AlertCircle, ExternalLink } from 'lucide-react'
 import PayWithWallet from './PayWithWallet'
 import { supabase } from '../lib/supabase'
 import { t } from '../i18n/t'
 import { getUsdc } from '@/onchain-facts'
+import { arc, ARC_MAINNET_CHAIN_ID } from '@/lib/arc-chain'
 import { Amount, usdcDecimalsFor } from '@/onchain-money'
 import { fetchUsdRate, formatLocal, CURRENCIES, accountLabelForCurrency } from '@/lib/currency'
 import type { LocalCurrency } from '@/lib/currency'
@@ -68,7 +68,7 @@ function CopyField({ label, value, mono }: { label: string; value: string; mono?
   )
 }
 
-const ARC_TESTNET_CHAIN_ID = 5042002
+const ARC_CHAIN_ID = ARC_MAINNET_CHAIN_ID
 
 const VAULT_ABI = [
   { name: 'swept',          type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool'    }] },
@@ -185,10 +185,10 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
   // Poll vault state every 5 s when vault address is present
   useEffect(() => {
     if (!hasVault || !isAddress(vaultAddress)) return
-    const usdcFact = getUsdc(ARC_TESTNET_CHAIN_ID)
+    const usdcFact = getUsdc(ARC_CHAIN_ID)
     if (!usdcFact) return
 
-    const client = createPublicClient({ chain: arcTestnet, transport: http() })
+    const client = createPublicClient({ chain: arc, transport: http() })
 
     const poll = async () => {
       setVaultLoading(true)
@@ -213,7 +213,7 @@ export default function PaymentPage({ searchParams }: PaymentPageProps) {
   }, [hasVault, vaultAddress])
 
   // Derived vault display
-  const decimals = usdcDecimalsFor(ARC_TESTNET_CHAIN_ID)
+  const decimals = usdcDecimalsFor(ARC_CHAIN_ID)
   const vaultReceived = vaultState ? Amount.fromRaw(vaultState.balance, decimals).toFixed(2) : null
   const vaultExpected = vaultState ? Amount.fromRaw(vaultState.expected, decimals).toFixed(2) : null
   const isPartial = vaultState && !vaultState.swept && vaultState.balance > 0n && vaultState.balance < vaultState.expected

@@ -37,9 +37,17 @@
 // moves funds; a bogus submission only costs a handful of RPC calls.
 //
 // Env (dashboard → Edge Functions → Secrets; never in code):
-//   ALCHEMY_API_KEY              — fallback for building the primary RPC URL.
-//   ALCHEMY_ARC_TESTNET_RPC_URL  — preferred primary RPC URL (takes precedence).
-//   ALCHEMY_RPC_URL              — alternate override (same as verify-payment).
+//   ALCHEMY_API_KEY              — legacy; only kept for operators that still
+//                                  set it. No URL is constructed from it
+//                                  anymore (a constructed Arc TESTNET URL
+//                                  would verify mainnet charges against the
+//                                  wrong chain — TRZ-MQD7).
+//   ALCHEMY_ARC_TESTNET_RPC_URL  — legacy name (kept for deploy compat);
+//                                  MUST now point at an Arc MAINNET RPC.
+//   ALCHEMY_RPC_URL              — preferred override for the primary
+//                                  backend; MUST point at an Arc MAINNET RPC
+//                                  (second independent backend is the public
+//                                  mainnet RPC below).
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY — auto-provided / dashboard secret.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
@@ -48,13 +56,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 
 const USDC_CONTRACT = "0x3600000000000000000000000000000000000000";
 const USDC_DECIMALS = 6;
-const ARC_TESTNET_CHAIN_ID = 5042002;
+const ARC_CHAIN_ID = 5042; // Arc mainnet (derived from src/onchain-facts.ts)
 const MIN_CONFIRMATIONS = 12;
 const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 // Public fallback backend: no secret, safe to hardcode (same value the
-// frontend's viem public client uses).
-const PUBLIC_RPC_URL = "https://rpc.testnet.arc.io";
+// frontend's viem public client uses). Arc MAINNET.
+const PUBLIC_RPC_URL = "https://rpc.mainnet.arc.io";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HASH_RE = /^0x[0-9a-fA-F]{64}$/;
@@ -192,11 +200,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const apiKey = Deno.env.get("ALCHEMY_API_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  // Primary backend MUST be an Arc MAINNET RPC supplied via secret. The old
+  // api-key→arc-testnet URL construction was removed on the mainnet flip
+  // (TRZ-MQD7): silently verifying mainnet charges against testnet would be
+  // worse than failing closed with misconfigured.
   const primaryRpc =
     Deno.env.get("ALCHEMY_ARC_TESTNET_RPC_URL") ??
     Deno.env.get("ALCHEMY_RPC_URL") ??
-    (apiKey ? `https://arc-testnet.g.alchemy.com/v2/${apiKey}` : null);
+    null;
   if (!supabaseUrl || !serviceKey || (!apiKey && !primaryRpc)) {
+    return json(500, { status: "error", reason: "misconfigured" });
+  }
+  if (!primaryRpc) {
     return json(500, { status: "error", reason: "misconfigured" });
   }
   const rpcA = primaryRpc as string;
@@ -460,7 +475,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     tx_hash: txHash,
     from_address: matchA.from,
     block_number: Number(matchA.blockNumber),
-    chain_id: ARC_TESTNET_CHAIN_ID,
+    chain_id: ARC_CHAIN_ID,
     raw_event: {
       source: "check-payment",
       txHash,
