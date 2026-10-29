@@ -271,10 +271,9 @@ export default function LandingPage({ onEnterApp, showRegister }: LandingPagePro
             </button>
             <div id="regiones" className="flex flex-wrap items-center gap-3 scroll-mt-24">
               <div className="passport-stamp px-3 py-1.5 rounded bg-white/[0.02] border-white/20 flex items-center gap-2">
-                <span className="text-xs">🇦🇷</span>
-                <span className="text-[11px] font-mono text-slate-200 font-semibold tracking-widest">{t('landing.hero.regions.argentina')}</span>
+                <span className="text-[11px] font-mono text-slate-200 font-semibold tracking-widest">{t('landing.hero.regions.beachhead')}</span>
                 <span className="text-[9px] font-mono text-icyCyan border border-cyan-400/40 px-1 py-0.5 rounded-sm bg-cyan-950/40 font-semibold">
-                  {t('landing.hero.regions.live')}
+                  {t('landing.hero.regions.focus')}
                 </span>
               </div>
               <span className="text-[11px] font-mono text-slate-500 tracking-wider">
