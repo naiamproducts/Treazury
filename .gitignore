@@ -38,3 +38,14 @@ Thumbs.db
 .archify/
 test-results/
 .atl/
+.engram/
+
+# ── Internal research corpus ───────────────────────────────────────────────
+docs/F.D/
+docs/L.D/
+docs/M.D/
+docs/P.D/
+docs/T.D/
+
+__pycache__/
+
